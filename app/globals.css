@@ -451,27 +451,37 @@ body {
 }
 h1 { font-weight: 750; letter-spacing: -0.02em; }
 h2 { font-weight: 700; }
-.brand-mark, .navbrand .brand-mark { background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 6px 16px -4px rgba(37, 82, 255, 0.5); }
+.brand-mark, .navbrand .brand-mark { background: linear-gradient(135deg, var(--btn-a), var(--btn-b)); box-shadow: 0 6px 16px -4px rgba(37, 82, 255, 0.5); }
 .card, .stat { border-radius: 18px; border-color: color-mix(in srgb, var(--line) 80%, transparent); }
 input, select, textarea { background: color-mix(in srgb, var(--bg) 70%, var(--card)); transition: border-color 0.15s, box-shadow 0.15s; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
 button { transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease, background 0.2s; }
-button:not(.secondary):not(.wa):not(.fleetcard):not(.on) { background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 6px 16px -6px rgba(37, 82, 255, 0.55); }
+button:not(.secondary):not(.wa):not(.fleetcard):not(.on) { background: linear-gradient(135deg, var(--btn-a), var(--btn-b)); box-shadow: 0 6px 16px -6px rgba(37, 82, 255, 0.55); }
 button:not(:disabled):not(.fleetcard):hover { filter: brightness(1.06); transform: translateY(-1px); }
 button:not(:disabled):active { transform: translateY(0) scale(0.98); }
 button.secondary:not(:disabled):hover { background: var(--accent-soft); }
 button.fleetcard { border-radius: 18px; transition: transform 0.18s ease, box-shadow 0.2s ease, border-color 0.2s; }
 button.fleetcard:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
-.roadfill { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
-.step.done i { background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.roadfill { background: linear-gradient(90deg, var(--btn-a), var(--btn-b)); }
+.step.done i { background: linear-gradient(90deg, var(--btn-a), var(--btn-b)); }
 .seg { border-radius: 14px; box-shadow: var(--shadow); }
-.seg button.on { background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 4px 12px -4px rgba(37, 82, 255, 0.55); }
+.seg button.on { background: linear-gradient(135deg, var(--btn-a), var(--btn-b)); box-shadow: 0 4px 12px -4px rgba(37, 82, 255, 0.55); }
 .seg button:not(.on) { box-shadow: none !important; background: transparent !important; }
 .banner { border-radius: 14px; }
 .wa { border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; }
-.cta { background: linear-gradient(135deg, var(--accent), var(--accent-2)); box-shadow: 0 10px 24px -8px rgba(37, 82, 255, 0.6); }
+.cta { background: linear-gradient(135deg, var(--btn-a), var(--btn-b)); box-shadow: 0 10px 24px -8px rgba(37, 82, 255, 0.6); }
 .cta:hover { transform: translateY(-2px); }
 .hero { background: radial-gradient(1000px 440px at 85% -10%, var(--accent-soft), transparent 70%), radial-gradient(700px 360px at 0% 0%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 70%); }
 ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } button, button.fleetcard { transition: none; } button:hover { transform: none !important; } }
+
+/* readable text: buttons always have white words on a dark enough colour, in light and dark mode */
+:root { --btn-a: #2552ff; --btn-b: #5b3df5; }
+@media (prefers-color-scheme: dark) {
+  :root { --btn-a: #2f55e0; --btn-b: #5a3fd8; --muted: #b4bccb; --text: #f4f6fa; }
+}
+button:not(.secondary):not(.fleetcard):not(.wa), .cta, .seg button.on { color: #fff !important; }
+button.wa { color: #fff; background: #12803f; }
+.seg button:not(.on) { color: var(--text); }
+.navbrand, .navbrand span { color: var(--text); }
