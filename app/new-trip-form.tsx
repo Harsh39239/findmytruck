@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { buildRoute } from "@/lib/geo";
-import { LABELS } from "@/lib/labels";
 import { normalizePhone } from "@/lib/rules";
 import type { RouteInfo, Trip } from "@/lib/store";
 import { Brand } from "./ui";
@@ -24,11 +23,6 @@ export default function NewTripForm({ onCreated, onCancel }: { onCreated: (c: Cr
     if ((from && !to) || (!from && to)) return setError("Enter both the pickup place and the drop place, or leave both empty.");
     if (values.phone?.trim() && !normalizePhone(values.phone)) return setError("Enter a valid phone number, for example 98765 43210");
 
-    // Open the WhatsApp tab right now (while the click still counts), and fill it in once the trip exists.
-    const toPhone = normalizePhone(values.phone ?? "");
-    const chat = toPhone ? window.open("", "_blank") : null;
-    chat?.document.write("Opening WhatsApp...");
-
     let route: RouteInfo | undefined;
     let routeNote = "";
     if (from && to) {
@@ -47,18 +41,7 @@ export default function NewTripForm({ onCreated, onCancel }: { onCreated: (c: Cr
     });
     const data = await res.json();
     setBusy("");
-    if (!res.ok) {
-      chat?.close();
-      return setError(data.error ?? "Something went wrong");
-    }
-    if (chat && toPhone) {
-      if (data.invite?.sent) chat.close(); // already delivered automatically on WhatsApp and/or SMS
-      else {
-        // Messaging is not connected: open WhatsApp with the driver's web link ready for the manager to send.
-        const text = LABELS.en.invite.replace("{url}", `${window.location.origin}/driver/${data.id}`);
-        chat.location.href = `https://wa.me/${toPhone.replace("+", "")}?text=${encodeURIComponent(text)}`;
-      }
-    }
+    if (!res.ok) return setError(data.error ?? "Something went wrong");
     onCreated({ trip: data, invite: data.invite ?? null, phone: values.phone ?? "", routeNote });
   }
 
