@@ -40,6 +40,9 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const [missing, setMissing] = useState(false);
   const [now, setNow] = useState(0); // set by the first timer tick
   const [copied, setCopied] = useState(false);
+  const [sim, setSim] = useState<{ from: "driver" | "bot"; text: string }[]>([]);
+  const [simText, setSimText] = useState("");
+  const [simBusy, setSimBusy] = useState(false);
 
   const foundRef = useRef(onFound);
   useEffect(() => { foundRef.current = onFound; });
@@ -60,6 +63,27 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
     const timer = setInterval(tick, 3000);
     return () => { clearTimeout(first); clearInterval(timer); };
   }, [load]);
+
+  // Demo panel: send a message as if it came from the driver's phone, and show what the app answers.
+  async function sendSim(text: string) {
+    if (!text.trim()) return;
+    setSimBusy(true);
+    setSim((cur) => [...cur, { from: "driver", text }]);
+    setSimText("");
+    try {
+      const res = await fetch("/api/chat-sim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId, text, via: "whatsapp" }),
+      });
+      const data = await res.json();
+      setSim((cur) => [...cur, { from: "bot", text: res.ok ? data.reply : data.error ?? "Something went wrong" }]);
+    } catch {
+      setSim((cur) => [...cur, { from: "bot", text: "No connection. Try again." }]);
+    }
+    setSimBusy(false);
+    load();
+  }
 
   async function markHandled(eventId: string) {
     if (!trip) return;
@@ -147,9 +171,46 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
         </div>
       )}
 
-      {invite?.sent && <div className="banner good">Link sent to the driver by {invite.via} (number ending {trip.phoneHint}).</div>}
+      {invite?.sent && (
+        <div className="banner good">
+          Driver messaged on {invite.results.filter((r) => r.sent).map((r) => r.via).join(" and ")} (number ending {trip.phoneHint}).
+          {invite.results.some((r) => !r.sent) && ` ${invite.results.filter((r) => !r.sent).map((r) => r.error).join(". ")}.`}
+          {" "}They choose their language by replying.
+        </div>
+      )}
       {invite && !invite.sent && (
-        <div className="banner">Not sent automatically ({invite.error}). WhatsApp opens with the message ready, or use the buttons below.</div>
+        <div className="banner">
+          {invite.configured
+            ? `The driver could not be messaged (${invite.results.map((r) => r.error).join(". ")}). `
+            : "Messaging is not connected yet, so nothing was sent automatically. "}
+          WhatsApp opens with the driver link ready for you to send.
+        </div>
+      )}
+
+      {trip.chat && (
+        <div className="card">
+          <strong>Driver chat</strong>
+          <p className="muted" style={{ margin: "4px 0 0" }}>
+            {trip.chat.stage === "awaiting_language"
+              ? "Waiting for the driver to choose a language. They reply 1 for Hindi, 2 for Tamil, 3 for Malayalam or 4 for English."
+              : `Talking in ${LANGUAGE_NAMES[trip.language]}${trip.chat.channel ? ` on ${trip.chat.channel === "whatsapp" ? "WhatsApp" : trip.chat.channel === "sms" ? "SMS" : "the web page"}` : ""}. Their replies update this screen by themselves.`}
+          </p>
+          <details style={{ marginTop: 10 }}>
+            <summary className="muted" style={{ cursor: "pointer" }}>Demo: reply as the driver</summary>
+            <p className="hint">Real replies arrive from WhatsApp or SMS. This panel runs the same code, so you can show the conversation without a phone.</p>
+            <div className="chatlog">
+              {sim.map((m, i) => <div key={i} className={`bubble ${m.from}`}>{m.text}</div>)}
+            </div>
+            <div className="row" style={{ marginTop: 8 }}>
+              <input value={simText} onChange={(e) => setSimText(e.target.value)} placeholder="Type what the driver would send, e.g. 2" style={{ flex: 3 }}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendSim(simText); } }} />
+              <button type="button" style={{ flex: 1 }} disabled={!simText.trim() || simBusy} onClick={() => sendSim(simText)}>Send</button>
+            </div>
+            <div className="chips">
+              {["1", "2", "3", "4", "0"].map((n) => <button key={n} type="button" className="secondary" disabled={simBusy} onClick={() => sendSim(n)}>{n}</button>)}
+            </div>
+          </details>
+        </div>
       )}
       {routeNote && <div className="banner">{routeNote}</div>}
 
@@ -202,7 +263,10 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
               ? <span className="badge handled" style={{ flex: "none" }}>HANDLED</span>
               : <span className={`badge ${ev.level}`} style={{ flex: "none" }}>{levelText[ev.level]}</span>}
           </div>
-          <div className="muted">{new Date(ev.at).toLocaleTimeString()} · {ago(ev.at, now)}</div>
+          <div className="muted">
+            {new Date(ev.at).toLocaleTimeString()} · {ago(ev.at, now)}
+            {ev.via && ` · ${ev.via === "whatsapp" ? "WhatsApp" : ev.via === "sms" ? "SMS" : "web page"}`}
+          </div>
           {ev.note && <p className="note">{ev.note}</p>}
           <div className="pair">
             <span>Original</span><span>{ev.original}</span>

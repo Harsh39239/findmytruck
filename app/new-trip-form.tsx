@@ -7,7 +7,7 @@ import { normalizePhone } from "@/lib/rules";
 import type { Language, RouteInfo, Trip } from "@/lib/store";
 import { Brand } from "./ui";
 
-export type Invite = { sent: boolean; via?: string; error?: string };
+export type Invite = { configured: boolean; sent: boolean; results: { via: string; sent: boolean; error?: string }[] };
 export type Created = { trip: Trip; invite: Invite | null; phone: string; routeNote: string };
 
 export default function NewTripForm({ onCreated, onCancel }: { onCreated: (c: Created) => void; onCancel?: () => void }) {
@@ -52,9 +52,11 @@ export default function NewTripForm({ onCreated, onCancel }: { onCreated: (c: Cr
       return setError(data.error ?? "Something went wrong");
     }
     if (chat && toPhone) {
-      if (data.invite?.sent) chat.close(); // already delivered automatically
+      if (data.invite?.sent) chat.close(); // already delivered automatically on WhatsApp and/or SMS
       else {
-        const text = LABELS[values.language as Language].invite.replace("{url}", `${window.location.origin}/driver/${data.id}`);
+        // Messaging is not connected: open WhatsApp with the driver's web link ready for the manager to send.
+        const lang = (values.language === "auto" ? "en" : values.language) as Language;
+        const text = LABELS[lang].invite.replace("{url}", `${window.location.origin}/driver/${data.id}`);
         chat.location.href = `https://wa.me/${toPhone.replace("+", "")}?text=${encodeURIComponent(text)}`;
       }
     }
@@ -67,17 +69,21 @@ export default function NewTripForm({ onCreated, onCancel }: { onCreated: (c: Cr
       {onCancel && <p><button className="secondary" type="button" onClick={onCancel}>← All trucks</button></p>}
       <form className="card" onSubmit={createTrip}>
         <strong>New trip</strong>
-        <p className="muted" style={{ margin: "2px 0 0" }}>The driver gets a link on their phone as soon as you create it.</p>
+        <p className="muted" style={{ margin: "2px 0 0" }}>The driver is messaged on their phone as soon as you create it. Their replies update this screen.</p>
 
         <div className="grid2">
           <div><label>Truck number</label><input name="truck" placeholder="MH12 AB 1234" /></div>
           <div><label>Driver name</label><input name="driver" placeholder="Ramesh" /></div>
         </div>
-        <label>Driver&apos;s phone (the link is sent here)</label>
+        <label>Driver&apos;s mobile number (WhatsApp and SMS)</label>
         <input name="phone" type="tel" inputMode="tel" placeholder="98765 43210" />
-        <div className="hint">10-digit Indian number, or +country code. Not saved after sending.</div>
+        <div className="hint">
+          10-digit Indian number, or +country code. The driver is messaged on WhatsApp and SMS in all four languages and
+          picks theirs by replying. The number is used only to message this driver.
+        </div>
         <label>Driver&apos;s language</label>
-        <select name="language" defaultValue="hi">
+        <select name="language" defaultValue="auto">
+          <option value="auto">Let the driver choose (recommended)</option>
           {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
         </select>
         <div className="grid2">
@@ -91,7 +97,7 @@ export default function NewTripForm({ onCreated, onCancel }: { onCreated: (c: Cr
         <div className="hint">Add both places to see the road route and the lorry on a map.</div>
 
         {error && <p className="error">{error}</p>}
-        <p><button className="wide" type="submit" disabled={!!busy}>{busy || "Create trip and send link"}</button></p>
+        <p><button className="wide" type="submit" disabled={!!busy}>{busy || "Create trip and message the driver"}</button></p>
       </form>
     </main>
   );

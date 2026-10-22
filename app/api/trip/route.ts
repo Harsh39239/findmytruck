@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { LABELS } from "@/lib/labels";
+import { activeMenu, languageMenu } from "@/lib/chat";
 import { normalizePhone } from "@/lib/rules";
-import { sendInvite } from "@/lib/sms";
-import { getTrip, saveTrip, type Language, type RouteInfo, type Trip } from "@/lib/store";
+import { messagingConfigured, sendToDriver } from "@/lib/sms";
+import { getTrip, publicTrip, saveTrip, type Language, type RouteInfo, type Trip } from "@/lib/store";
 
 const LANGS: Language[] = ["hi", "ta", "ml", "en"];
 
@@ -21,28 +21,24 @@ function cleanRoute(r: unknown): RouteInfo | undefined {
   };
 }
 
-function originOf(req: Request) {
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? new URL(req.url).host;
-  const proto = req.headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return `${proto}://${host}`;
-}
-
-// Manager reads a trip (with its events). The driver page also uses this to load its labels.
+// Manager reads a trip (with its events). The driver's web page also uses this. The phone number never leaves the server.
 export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("id") ?? "";
   const trip = await getTrip(id);
   if (!trip) return NextResponse.json({ error: "Trip not found" }, { status: 404 });
-  return NextResponse.json(trip);
+  return NextResponse.json(publicTrip(trip));
 }
 
-// Manager creates the trip. If a phone number is given, the driver link is sent to it right away.
+// Manager creates the trip. With a phone number, the driver is messaged on WhatsApp and SMS straight away,
+// in all languages, and picks their own by replying. After that the conversation happens in their chat.
 export async function POST(req: Request) {
   const b = await req.json().catch(() => null);
   const truck = String(b?.truck ?? "").trim();
   const driver = String(b?.driver ?? "").trim();
   const material = String(b?.material ?? "").trim();
   const expectedKg = Number(b?.expectedKg);
-  const language = b?.language as Language;
+  const rawLanguage = String(b?.language ?? "auto");
+  const language = rawLanguage as Language;
   const rawPhone = String(b?.phone ?? "").trim();
   const phone = rawPhone ? normalizePhone(rawPhone) : null;
 
@@ -51,20 +47,23 @@ export async function POST(req: Request) {
     !driver && "driver",
     !material && "material",
     !(expectedKg > 0) && "expected weight (kg)",
-    !LANGS.includes(language) && "driver's language",
+    rawLanguage !== "auto" && !LANGS.includes(language) && "driver's language",
   ].filter(Boolean);
   if (missing.length) return NextResponse.json({ error: `Please fill in: ${missing.join(", ")}` }, { status: 400 });
   if (rawPhone && !phone) {
     return NextResponse.json({ error: "Enter a valid phone number, for example 98765 43210 or +91 98765 43210" }, { status: 400 });
   }
 
+  const driverChooses = rawLanguage === "auto";
   const trip: Trip = {
     id: crypto.randomUUID().slice(0, 8),
     truck,
     driver,
+    phone: phone ?? undefined,
     phoneHint: phone ? phone.slice(-4) : undefined,
+    chat: phone ? { stage: driverChooses ? "awaiting_language" : "active" } : undefined,
     route: cleanRoute(b?.route),
-    language,
+    language: driverChooses ? "en" : language,
     material,
     expectedKg,
     createdAt: Date.now(),
@@ -72,8 +71,12 @@ export async function POST(req: Request) {
   };
   await saveTrip(trip);
 
-  if (!phone) return NextResponse.json(trip);
-  const url = `${originOf(req)}/driver/${trip.id}`;
-  const invite = await sendInvite(phone, LABELS[language].invite.replace("{url}", url));
-  return NextResponse.json({ ...trip, invite });
+  if (!phone) return NextResponse.json(publicTrip(trip));
+
+  const text = driverChooses ? languageMenu(truck) : activeMenu(trip.language, truck);
+  const results = await sendToDriver(phone, text);
+  return NextResponse.json({
+    ...publicTrip(trip),
+    invite: { configured: messagingConfigured(), results, sent: results.some((r) => r.sent) },
+  });
 }

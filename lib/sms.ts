@@ -1,17 +1,28 @@
-// Sends the driver link by SMS or WhatsApp through Twilio, when its keys are set in the environment:
-//   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM
-// TWILIO_FROM is a Twilio phone number for SMS, or "whatsapp:+14155238886" (the sandbox) for WhatsApp.
-// With no keys it does nothing, and the manager screen shows one-tap send buttons instead.
+// Sends messages to the driver through Twilio, on WhatsApp and SMS at the same time.
+// Set these in the environment (Vercel, and .env.local on your computer):
+//   TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN
+//   TWILIO_FROM_WHATSAPP  e.g. whatsapp:+14155238886 (the Twilio WhatsApp sandbox)
+//   TWILIO_FROM_SMS       e.g. +15005550006 (a Twilio phone number that can send SMS)
+// With none of these set nothing is sent, and the manager screen explains it.
 
-export type SendResult = { sent: boolean; via?: "SMS" | "WhatsApp"; error?: string };
+export type Channel = "WhatsApp" | "SMS";
+export type SendResult = { via: Channel; sent: boolean; error?: string };
 
-export async function sendInvite(toPhone: string, text: string): Promise<SendResult> {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM;
-  if (!sid || !token || !from) return { sent: false, error: "Automatic sending is not set up" };
+function senders(): { via: Channel; from: string }[] {
+  const out: { via: Channel; from: string }[] = [];
+  const wa = process.env.TWILIO_FROM_WHATSAPP;
+  const sms = process.env.TWILIO_FROM_SMS;
+  const old = process.env.TWILIO_FROM; // single-number setting from the first version
+  if (wa) out.push({ via: "WhatsApp", from: wa.startsWith("whatsapp:") ? wa : `whatsapp:${wa}` });
+  if (sms) out.push({ via: "SMS", from: sms });
+  if (old && !wa && old.startsWith("whatsapp:")) out.push({ via: "WhatsApp", from: old });
+  if (old && !sms && !old.startsWith("whatsapp:")) out.push({ via: "SMS", from: old });
+  return out;
+}
 
-  const whatsapp = from.startsWith("whatsapp:");
+export const messagingConfigured = () => !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && senders().length);
+
+async function sendOne(sid: string, token: string, via: Channel, from: string, toPhone: string, text: string): Promise<SendResult> {
   try {
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
       method: "POST",
@@ -19,13 +30,22 @@ export async function sendInvite(toPhone: string, text: string): Promise<SendRes
         Authorization: `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({ To: whatsapp ? `whatsapp:${toPhone}` : toPhone, From: from, Body: text }),
+      body: new URLSearchParams({ To: via === "WhatsApp" ? `whatsapp:${toPhone}` : toPhone, From: from, Body: text }),
       signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) return { sent: false, error: `Message service returned ${res.status}` };
-    return { sent: true, via: whatsapp ? "WhatsApp" : "SMS" };
+    if (!res.ok) return { via, sent: false, error: `${via} service returned ${res.status}` };
+    return { via, sent: true };
   } catch (err) {
-    console.error("send error:", (err as Error).message);
-    return { sent: false, error: "Could not reach the message service" };
+    console.error(`${via} send error:`, (err as Error).message);
+    return { via, sent: false, error: `Could not reach the ${via} service` };
   }
+}
+
+// Sends the same text on every configured channel. Returns one result per channel.
+export async function sendToDriver(toPhone: string, text: string): Promise<SendResult[]> {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const list = senders();
+  if (!sid || !token || list.length === 0) return [];
+  return Promise.all(list.map((s) => sendOne(sid, token, s.via, s.from, toPhone, text)));
 }
