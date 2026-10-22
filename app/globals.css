@@ -129,7 +129,7 @@ button.fleetcard strong { font-size: 1.05rem; }
 .pin-b { background: #b91c1c; }
 .truck-wrap { background: none; border: 0; }
 .truck-rot { width: 34px; height: 52px; transition: transform 0.25s linear; transform-origin: 50% 50%; }
-.truck-bob svg { display: block; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.35)); }
+.truck-bob svg { display: block; }
 .truck-wrap.moving .truck-bob { animation: bob 0.5s ease-in-out infinite alternate; }
 .truck-wrap.moving .halo { animation: pulse 1.4s ease-out infinite; transform-origin: 50% 55%; }
 @keyframes bob { from { transform: translateX(-0.6px); } to { transform: translateX(0.6px) translateY(-0.8px); } }
@@ -302,7 +302,6 @@ html { scroll-behavior: smooth; scroll-padding-top: 74px; }
 .mapstats b { font-size: 0.85rem; }
 .mapstats span { font-size: 0.75rem; color: #475467; }
 .map { height: 340px; }
-.leaflet-tile-pane { filter: saturate(0.9) brightness(1.02); }
 .pin { position: relative; }
 .pinlabel { position: absolute; left: 36px; top: 3px; white-space: nowrap; max-width: 130px; overflow: hidden; text-overflow: ellipsis; background: #fff; color: #1b2333; padding: 3px 9px; border-radius: 99px; font-size: 0.74rem; font-weight: 700; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3); }
 .truck-rot { width: 40px; height: 64px; }
@@ -388,3 +387,14 @@ button.fleetcard.attn { border-color: var(--review); }
 .statusline { display: flex; align-items: center; gap: 10px; }
 .dot { width: 11px; height: 11px; border-radius: 50%; background: #98a2b3; flex: none; }
 .dot.on { background: #16a34a; box-shadow: 0 0 0 4px color-mix(in srgb, #16a34a 25%, transparent); }
+
+/* ---------- map v3: lighter and clearer ---------- */
+.map { background: #e8edf4; }
+.truck-wrap, .truck-rot { will-change: transform; }
+.mapstats { min-width: 200px; max-width: 78%; gap: 6px; padding: 10px 14px; }
+.mapstats .ms-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.mapstats .ms-row b { font-size: 0.9rem; }
+.mapstats .ms-row strong { font-size: 0.9rem; color: var(--accent); }
+.mapstats .ms-bar { height: 6px; border-radius: 99px; background: #dfe5ee; overflow: hidden; }
+.mapstats .ms-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3b7bff, #1f5eff); transition: width 0.3s linear; }
+.mapstats span { font-size: 0.76rem; color: #475467; }
