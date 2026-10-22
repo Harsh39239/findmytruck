@@ -1,7 +1,15 @@
 // Run with: npm test
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideSlip, decideText } from "../lib/rules.ts";
+import { decideSlip, decideText, hasReadableText } from "../lib/rules.ts";
+
+test("text with no letters is rejected, real words in any script pass (Test 3)", () => {
+  assert.equal(hasReadableText("???? ????"), false);
+  assert.equal(hasReadableText("..."), false);
+  assert.equal(hasReadableText("पहुँच गया"), true);
+  assert.equal(hasReadableText("லோடு ஏற்றியாச்சு"), true);
+  assert.equal(hasReadableText("ലോഡ് കയറ്റി"), true);
+});
 
 test("clear slip within 2% is OK (Test 1)", () => {
   const r = decideSlip({ weightKg: 18450, readable: true, confidence: 0.95 }, 18500);

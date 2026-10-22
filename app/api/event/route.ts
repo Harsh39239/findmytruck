@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readSlip, translateReply } from "@/lib/ai";
 import { LABELS } from "@/lib/labels";
-import { STATUSES, decideSlip, decideText } from "@/lib/rules";
+import { STATUSES, decideSlip, decideText, hasReadableText } from "@/lib/rules";
 import { getTrip, saveTrip, type Event } from "@/lib/store";
 
 const MAX_PHOTO_CHARS = 3_000_000;
@@ -32,6 +32,20 @@ export async function POST(req: Request) {
   } else if (b.kind === "text") {
     const text = String(b.text ?? "").trim().slice(0, 500);
     if (!text) return NextResponse.json({ error: "Message is empty" }, { status: 400 });
+    if (!hasReadableText(text)) {
+      event = {
+        ...base,
+        kind: "text",
+        original: text,
+        translation: "",
+        status: "Unknown",
+        level: "review",
+        note: "The message has no readable words. Check with the driver.",
+      };
+      trip.events.push(event);
+      await saveTrip(trip);
+      return NextResponse.json(event);
+    }
     try {
       const ai = await translateReply(text);
       const verdict = decideText(ai.status, ai.confidence, hasPhoto);

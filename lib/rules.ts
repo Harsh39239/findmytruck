@@ -9,6 +9,9 @@ export const STATUSES = ["Reached", "Loaded", "Left", "Delivered"] as const;
 
 const kg = (n: number) => n.toLocaleString("en-US");
 
+// A message with no letters in any language (for example "????" or "...") can't be a status.
+export const hasReadableText = (text: string) => /\p{L}/u.test(text);
+
 export function withinTolerance(weightKg: number, expectedKg: number) {
   return Math.abs(weightKg - expectedKg) <= (expectedKg * TOLERANCE_PCT) / 100;
 }
