@@ -79,6 +79,12 @@ button:disabled { opacity: 0.5; cursor: default; }
 .row > * { flex: 1; }
 .error { color: var(--flag); font-weight: 600; font-size: 0.9rem; }
 .banner { border-radius: 12px; padding: 10px 12px; font-size: 0.9rem; margin-bottom: 12px; border: 1px solid var(--line); background: var(--accent-soft); }
+.banner.danger { background: var(--flag-bg); color: var(--flag); border-color: transparent; }
+.silenttext { color: var(--flag); font-weight: 700; font-size: 0.9rem; }
+button.fleetcard.silent { border-color: var(--flag); }
+.badge.pulse { animation: blink 1.3s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) { .badge.pulse { animation: none; } }
 .banner.good { background: var(--ok-bg); color: var(--ok); border-color: transparent; font-weight: 600; }
 
 /* stepper */

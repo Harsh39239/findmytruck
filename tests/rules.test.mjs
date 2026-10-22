@@ -1,7 +1,7 @@
 // Run with: npm test
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideSlip, decideText, hasReadableText, normalizePhone, openCount, routeProgress, stageIndex } from "../lib/rules.ts";
+import { decideSlip, decideText, hasReadableText, normalizePhone, openCount, routeProgress, silentFor, stageIndex } from "../lib/rules.ts";
 
 test("phone numbers are cleaned, bad ones rejected", () => {
   assert.equal(normalizePhone("98765 43210"), "+919876543210");
@@ -31,6 +31,23 @@ test("trip codes are picked out of links or typed codes", async () => {
   assert.equal(parseTripCode("  https://x.app/#/trip/8e95dc1b/ "), "8e95dc1b");
   assert.equal(parseTripCode("hello"), null);
   assert.equal(parseTripCode(""), null);
+});
+
+test("a driver is silent after the chosen time, never once delivered", () => {
+  const min = 60000;
+  const t0 = 10_000_000;
+  // started, last message 45 minutes ago, limit 30 -> silent for 45
+  assert.equal(silentFor([{ at: t0 }], t0 - 99, 0, t0 + 45 * min, 30), 45);
+  // 29 minutes is still fine
+  assert.equal(silentFor([{ at: t0 }], t0 - 99, 0, t0 + 29 * min, 30), 0);
+  // the newest message counts, not the first
+  assert.equal(silentFor([{ at: t0 }, { at: t0 + 40 * min }], t0 - 99, 1, t0 + 45 * min, 30), 0);
+  // a trip nobody has touched is measured from when it was created
+  assert.equal(silentFor([], t0, -1, t0 + 31 * min, 30), 31);
+  // delivered trips are never silent
+  assert.equal(silentFor([{ at: t0 }], t0, 3, t0 + 999 * min, 30), 0);
+  // clock not started yet (now = 0) must not flag anything
+  assert.equal(silentFor([{ at: t0 }], t0, 0, 0, 30), 0);
 });
 
 test("open items count review and flag that are not handled", () => {

@@ -19,6 +19,7 @@ export const LABELS: Record<Language, Record<string, string>> = {
     send: "भेजें",
     sent: "भेज दिया ✓",
     invite: "FindMyTruck: अपनी ट्रिप का हाल बताने के लिए यह लिंक खोलें: {url}",
+    nudge: "FindMyTruck: कृपया अपनी ट्रिप का हाल बताएं: {url}",
   },
   ta: {
     Reached: "வந்துவிட்டேன்",
@@ -30,6 +31,7 @@ export const LABELS: Record<Language, Record<string, string>> = {
     send: "அனுப்பு",
     sent: "அனுப்பப்பட்டது ✓",
     invite: "FindMyTruck: உங்கள் பயண நிலையைத் தெரிவிக்க இந்த இணைப்பைத் திறக்கவும்: {url}",
+    nudge: "FindMyTruck: தயவுசெய்து உங்கள் பயண நிலையைத் தெரிவிக்கவும்: {url}",
   },
   ml: {
     Reached: "എത്തി",
@@ -41,6 +43,7 @@ export const LABELS: Record<Language, Record<string, string>> = {
     send: "അയയ്ക്കുക",
     sent: "അയച്ചു ✓",
     invite: "FindMyTruck: നിങ്ങളുടെ യാത്രയുടെ വിവരം അറിയിക്കാൻ ഈ ലിങ്ക് തുറക്കുക: {url}",
+    nudge: "FindMyTruck: ദയവായി നിങ്ങളുടെ യാത്രയുടെ വിവരം അറിയിക്കുക: {url}",
   },
   en: {
     Reached: "Reached",
@@ -52,5 +55,6 @@ export const LABELS: Record<Language, Record<string, string>> = {
     send: "Send",
     sent: "Sent ✓",
     invite: "FindMyTruck: open this link to update your trip: {url}",
+    nudge: "FindMyTruck: please update your trip status: {url}",
   },
 };

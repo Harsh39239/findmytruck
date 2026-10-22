@@ -4,8 +4,8 @@
 import dynamic from "next/dynamic";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LABELS } from "@/lib/labels";
-import { STATUSES, normalizePhone, openCount, routeProgress, stageIndex } from "@/lib/rules";
+import { LABELS, LANGUAGES } from "@/lib/labels";
+import { STATUSES, normalizePhone, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
 import type { Event, Trip } from "@/lib/store";
 import type { Created } from "./new-trip-form";
 import { Brand, ago, duration } from "./ui";
@@ -13,6 +13,7 @@ import { Brand, ago, duration } from "./ui";
 const RouteMap = dynamic(() => import("./route-map"), { ssr: false, loading: () => <div className="map" /> });
 
 const levelText = { ok: "OK", review: "REVIEW", flag: "FLAG" } as const;
+const LANGUAGE_NAMES = Object.fromEntries(LANGUAGES.map((l) => [l.code, l.name])) as Record<string, string>;
 
 // A QR code of the driver link: the driver scans it with the phone camera and the page opens.
 function Qr({ url }: { url: string }) {
@@ -28,12 +29,13 @@ type Props = {
   created: Created | null; // set only right after this trip was made on this screen
   demoSpeed: boolean;
   setDemoSpeed: (on: boolean) => void;
+  silentMin: number;
   onBack: () => void;
   onRemove: () => void; // drop this truck from the list
   onFound: () => void; // the trip exists, make sure it is on the list
 };
 
-export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, onBack, onRemove, onFound }: Props) {
+export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, silentMin, onBack, onRemove, onFound }: Props) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [missing, setMissing] = useState(false);
   const [now, setNow] = useState(0); // set by the first timer tick
@@ -102,7 +104,9 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, o
   const route = trip.route;
   const progress = route ? routeProgress(trip.events, route.durationMin, speed, now) : 0;
   const message = LABELS[trip.language].invite.replace("{url}", link);
+  const nudge = LABELS[trip.language].nudge.replace("{url}", link);
   const digits = (normalizePhone(phone) ?? "").replace("+", "");
+  const silent = silentFor(trip.events, trip.createdAt, stage, now, silentMin);
 
   return (
     <main>
@@ -125,13 +129,23 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, o
       </div>
 
       <div className="stats">
-        <div className="stat"><b>{last ? ago(last.at, now) : "None yet"}</b><span>Last update</span></div>
+        <div className={`stat ${silent > 0 ? "alert" : ""}`}><b>{last ? ago(last.at, now) : "None yet"}</b><span>Last update</span></div>
         <div className={`stat ${open > 0 ? "alert" : ""}`}><b>{open}</b><span>Need your decision</span></div>
         <div className="stat">
           <b>{route ? `${route.distanceKm} km` : `${trip.expectedKg.toLocaleString("en-US")} kg`}</b>
           <span>{route ? `About ${duration(route.durationMin)}` : "Expected load"}</span>
         </div>
       </div>
+
+      {silent > 0 && (
+        <div className="banner danger">
+          <strong>No news from the driver for {duration(silent)}.</strong>
+          <div style={{ margin: "4px 0 10px" }}>Call them, or send a reminder in {LANGUAGE_NAMES[trip.language]}.</div>
+          <a href={`https://wa.me/${digits}?text=${encodeURIComponent(nudge)}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+            <button className="wa wide" type="button">Send reminder on WhatsApp</button>
+          </a>
+        </div>
+      )}
 
       {invite?.sent && <div className="banner good">Link sent to the driver by {invite.via} (number ending {trip.phoneHint}).</div>}
       {invite && !invite.sent && (

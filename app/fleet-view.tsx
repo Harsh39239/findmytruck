@@ -1,15 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { STATUSES, openCount, routeProgress, stageIndex } from "@/lib/rules";
-import { parseTripCode } from "@/lib/fleet";
+import { STATUSES, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
+import { SILENT_OPTIONS, parseTripCode } from "@/lib/fleet";
 import type { TripSummary } from "@/lib/store";
-import { Brand, ago } from "./ui";
+import { Brand, ago, duration } from "./ui";
 
 type Props = {
   ids: string[];
   demoSpeed: boolean;
   setDemoSpeed: (on: boolean) => void;
+  silentMin: number;
+  setSilentMin: (min: number) => void;
   onOpen: (id: string) => void;
   onNew: () => void;
   onAdd: (id: string) => void;
@@ -24,7 +26,7 @@ function LorryMini() {
   );
 }
 
-export default function FleetView({ ids, demoSpeed, setDemoSpeed, onOpen, onNew, onAdd, onMissing }: Props) {
+export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, setSilentMin, onOpen, onNew, onAdd, onMissing }: Props) {
   const [trips, setTrips] = useState<TripSummary[] | null>(null);
   const [now, setNow] = useState(0);
   const [code, setCode] = useState("");
@@ -61,13 +63,15 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, onOpen, onNew,
   }
 
   const speed = demoSpeed ? 60 : 1;
+  const silentOf = (t: TripSummary) => silentFor(t.events, t.createdAt, stageIndex(t.events), now, silentMin);
+  // Trucks that need you (a decision to make, or a driver gone quiet) come first, delivered ones last.
   const sorted = [...(trips ?? [])].sort((a, b) => {
-    const rank = (t: TripSummary) => (openCount(t.events) > 0 ? 0 : stageIndex(t.events) >= 3 ? 2 : 1);
+    const rank = (t: TripSummary) => (openCount(t.events) > 0 || silentOf(t) > 0 ? 0 : stageIndex(t.events) >= 3 ? 2 : 1);
     const lastAt = (t: TripSummary) => t.events[t.events.length - 1]?.at ?? t.createdAt;
     return rank(a) - rank(b) || lastAt(b) - lastAt(a);
   });
   const needDecision = sorted.filter((t) => openCount(t.events) > 0).length;
-  const onRoad = sorted.filter((t) => { const s = stageIndex(t.events); return s >= 2 && s < 3; }).length;
+  const silentCount = sorted.filter((t) => silentOf(t) > 0).length;
 
   return (
     <main>
@@ -84,7 +88,13 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, onOpen, onNew,
       <div className="stats">
         <div className="stat"><b>{trips ? sorted.length : "…"}</b><span>Trucks</span></div>
         <div className={`stat ${needDecision > 0 ? "alert" : ""}`}><b>{trips ? needDecision : "…"}</b><span>Need you</span></div>
-        <div className="stat"><b>{trips ? onRoad : "…"}</b><span>On the road</span></div>
+        <div className={`stat ${silentCount > 0 ? "alert" : ""}`}><b>{trips ? silentCount : "…"}</b><span>Silent</span></div>
+      </div>
+      <div className="row" style={{ marginBottom: 12, alignItems: "center" }}>
+        <span className="muted" style={{ flex: 2 }}>Mark a driver silent after</span>
+        <select value={silentMin} onChange={(e) => setSilentMin(Number(e.target.value))} aria-label="Silent driver time" style={{ flex: 1 }}>
+          {SILENT_OPTIONS.map((o) => <option key={o.min} value={o.min}>{o.label}</option>)}
+        </select>
       </div>
 
       {trips && sorted.length === 0 && <p className="muted">None of your trucks could be loaded yet. They may have expired.</p>}
@@ -94,18 +104,21 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, onOpen, onNew,
         const stage = stageIndex(t.events);
         const last = t.events[t.events.length - 1];
         const progress = t.route ? routeProgress(t.events, t.route.durationMin, speed, now) : 0;
+        const silent = silentOf(t);
         const status =
           stage < 0 ? "Not started"
           : stage >= 3 ? "Delivered"
           : stage === 2 ? `On the road${t.route ? `, ${Math.round(progress * 100)}%` : ""}`
           : stage === 1 ? "Loaded" : "Reached pickup";
         return (
-          <button key={t.id} className="fleetcard" onClick={() => onOpen(t.id)}>
+          <button key={t.id} className={`fleetcard ${silent > 0 ? "silent" : ""}`} onClick={() => onOpen(t.id)}>
             <div className="row" style={{ justifyContent: "space-between" }}>
               <strong>{t.truck}</strong>
-              {open > 0
-                ? <span className="badge flag" style={{ flex: "none" }}>{open} NEED{open === 1 ? "S" : ""} YOU</span>
-                : stage >= 3 ? <span className="badge ok" style={{ flex: "none" }}>DONE</span> : null}
+              <span className="row" style={{ flex: "none", gap: 6 }}>
+                {silent > 0 && <span className="badge flag pulse" style={{ flex: "none" }}>SILENT</span>}
+                {open > 0 && <span className="badge flag" style={{ flex: "none" }}>{open} NEED{open === 1 ? "S" : ""} YOU</span>}
+                {open === 0 && stage >= 3 && <span className="badge ok" style={{ flex: "none" }}>DONE</span>}
+              </span>
             </div>
             <div className="muted">{t.driver} · {t.material}{t.route ? ` · ${t.route.from} → ${t.route.to}` : ""}</div>
             <div className="steps mini">
@@ -116,7 +129,9 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, onOpen, onNew,
             )}
             <div className="row" style={{ justifyContent: "space-between", marginTop: 6 }}>
               <span className="muted"><b>{status}</b></span>
-              <span className="muted" style={{ textAlign: "right" }}>{last ? ago(last.at, now) : "no update yet"}</span>
+              <span className={silent > 0 ? "silenttext" : "muted"} style={{ textAlign: "right" }}>
+                {silent > 0 ? `No news for ${duration(silent)}` : last ? ago(last.at, now) : "no update yet"}
+              </span>
             </div>
           </button>
         );

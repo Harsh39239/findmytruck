@@ -25,6 +25,16 @@ export function stageIndex(events: Stamped[]) {
 // Review and flag items the manager has not dealt with yet.
 export const openCount = (events: Stamped[]) => events.filter((e) => e.level !== "ok" && !e.handled).length;
 
+// Minutes of silence from the driver, or 0 when all is well. A trip counts as silent when it is not
+// delivered yet and nothing has come in for `thresholdMin` minutes. A trip nobody has opened is measured
+// from the moment it was created.
+export function silentFor(events: { at: number }[], createdAt: number, stage: number, now: number, thresholdMin: number) {
+  if (stage >= 3) return 0;
+  const lastAt = events.length ? events[events.length - 1].at : createdAt;
+  const mins = Math.floor(Math.max(0, now - lastAt) / 60000);
+  return mins >= thresholdMin ? mins : 0;
+}
+
 // Estimated share of the road covered (0 to 1). There is no live GPS: once the driver taps "Left",
 // the lorry moves along the route at the road's estimated driving time. `speed` > 1 fast-forwards for demos.
 export function routeProgress(events: Stamped[], durationMin: number, speed: number, now: number) {

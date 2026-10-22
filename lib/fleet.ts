@@ -31,6 +31,29 @@ export function writeDemoSpeed(on: boolean) {
   try { localStorage.setItem(SPEED, on ? "on" : "off"); } catch {}
 }
 
+// How long a driver can stay quiet before the truck turns red. Chosen by the manager, kept in this browser.
+export const SILENT_OPTIONS = [
+  { min: 1, label: "1 min (demo)" },
+  { min: 15, label: "15 min" },
+  { min: 30, label: "30 min" },
+  { min: 60, label: "1 hour" },
+  { min: 120, label: "2 hours" },
+];
+const SILENT = "findmytruck-silent-min";
+
+export function readSilentMin(): number {
+  try {
+    const n = Number(localStorage.getItem(SILENT));
+    return SILENT_OPTIONS.some((o) => o.min === n) ? n : 30;
+  } catch {
+    return 30;
+  }
+}
+
+export function writeSilentMin(min: number) {
+  try { localStorage.setItem(SILENT, String(min)); } catch {}
+}
+
 // A trip id can arrive from a link or be typed in: take just the 8-character code.
 export function parseTripCode(input: string): string | null {
   const m = input.trim().match(/([a-z0-9]{8})\/?$/i);

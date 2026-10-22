@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { readDemoSpeed, readIds, writeDemoSpeed, writeIds } from "@/lib/fleet";
+import { readDemoSpeed, readIds, readSilentMin, writeDemoSpeed, writeIds, writeSilentMin } from "@/lib/fleet";
 import FleetView from "./fleet-view";
 import NewTripForm, { type Created } from "./new-trip-form";
 import TripDetail from "./trip-detail";
@@ -20,12 +20,14 @@ export default function ManagerPage() {
   const [screen, setScreen] = useState<string | null>(null); // null until we have read the address and saved list
   const [ids, setIds] = useState<string[]>([]);
   const [demoSpeed, setDemo] = useState(true);
+  const [silentMin, setSilent] = useState(30);
   const [created, setCreated] = useState<Created | null>(null);
 
   useEffect(() => {
     const start = setTimeout(() => {
       setIds(readIds());
       setDemo(readDemoSpeed());
+      setSilent(readSilentMin());
       setScreen(screenFromHash());
     }, 0);
     const onHash = () => setScreen(screenFromHash());
@@ -57,6 +59,11 @@ export default function ManagerPage() {
     writeDemoSpeed(on);
   }
 
+  function setSilentMin(min: number) {
+    setSilent(min);
+    writeSilentMin(min);
+  }
+
   if (screen === null) return <main><Brand /><p className="muted">Loading...</p></main>;
 
   if (screen.startsWith("trip:")) {
@@ -68,6 +75,7 @@ export default function ManagerPage() {
         created={created}
         demoSpeed={demoSpeed}
         setDemoSpeed={setDemoSpeed}
+        silentMin={silentMin}
         onBack={() => go("#/")}
         onRemove={() => { removeIds([id]); go("#/"); }}
         onFound={() => addId(id)}
@@ -90,6 +98,8 @@ export default function ManagerPage() {
       ids={ids}
       demoSpeed={demoSpeed}
       setDemoSpeed={setDemoSpeed}
+      silentMin={silentMin}
+      setSilentMin={setSilentMin}
       onOpen={(id) => go(`#/trip/${id}`)}
       onNew={() => go("#/new")}
       onAdd={(id) => { addId(id); go(`#/trip/${id}`); }}
