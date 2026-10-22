@@ -33,9 +33,10 @@ type Props = {
   onBack: () => void;
   onRemove: () => void; // drop this truck from the list
   onFound: () => void; // the trip exists, make sure it is on the list
+  embedded?: boolean; // shown inside the demo page: no header, buttons, driver link or chat panel
 };
 
-export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, silentMin, onBack, onRemove, onFound }: Props) {
+export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, silentMin, onBack, onRemove, onFound, embedded = false }: Props) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [missing, setMissing] = useState(false);
   const [now, setNow] = useState(0); // set by the first timer tick
@@ -60,9 +61,9 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   useEffect(() => {
     const tick = () => { setNow(Date.now()); load(); };
     const first = setTimeout(tick, 0);
-    const timer = setInterval(tick, 3000);
+    const timer = setInterval(tick, embedded ? 1500 : 3000);
     return () => { clearTimeout(first); clearInterval(timer); };
-  }, [load]);
+  }, [load, embedded]);
 
   // Demo panel: send a message as if it came from the driver's phone, and show what the app answers.
   async function sendSim(text: string) {
@@ -115,8 +116,9 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   }
   if (!trip) return <main><Brand /><p className="muted">Loading...</p></main>;
 
-  const invite = created?.trip.id === trip.id ? created.invite : null;
-  const routeNote = created?.trip.id === trip.id ? created.routeNote : "";
+  const invite = !embedded && created?.trip.id === trip.id ? created.invite : null;
+  const routeNote = !embedded && created?.trip.id === trip.id ? created.routeNote : "";
+  const Shell = embedded ? "div" : "main";
   const phone = created?.trip.id === trip.id ? created.phone : "";
 
   const events = [...trip.events].reverse();
@@ -124,7 +126,7 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const link = `${window.location.origin}/driver/${trip.id}`;
   const open = openCount(trip.events);
   const stage = stageIndex(trip.events);
-  const speed = demoSpeed ? 60 : 1;
+  const speed = demoSpeed ? (embedded ? 240 : 60) : 1; // the demo page runs the whole route in about 30 seconds
   const route = trip.route;
   const progress = route ? routeProgress(trip.events, route.durationMin, speed, now) : 0;
   const message = LABELS[trip.language].invite.replace("{url}", link);
@@ -133,13 +135,15 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const silent = silentFor(trip.events, trip.createdAt, stage, now, silentMin);
 
   return (
-    <main>
-      <Brand />
+    <Shell className={embedded ? "embed" : undefined}>
+      {!embedded && <Brand />}
 
-      <div className="row" style={{ marginBottom: 12 }}>
-        <button className="secondary" onClick={onBack}>← All trucks</button>
-        <button className="secondary" onClick={() => { if (confirm("Remove this truck from your list? The trip itself is not deleted.")) onRemove(); }}>Remove</button>
-      </div>
+      {!embedded && (
+        <div className="row" style={{ marginBottom: 12 }}>
+          <button className="secondary" onClick={onBack}>← All trucks</button>
+          <button className="secondary" onClick={() => { if (confirm("Remove this truck from your list? The trip itself is not deleted.")) onRemove(); }}>Remove</button>
+        </div>
+      )}
 
       <div style={{ marginBottom: 12 }}>
         <strong style={{ fontSize: "1.2rem" }}>{trip.truck}</strong>
@@ -187,7 +191,7 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
         </div>
       )}
 
-      {trip.chat && (
+      {trip.chat && !embedded && (
         <div className="card">
           <strong>Driver chat</strong>
           <p className="muted" style={{ margin: "4px 0 0" }}>
@@ -231,6 +235,7 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
         </div>
       )}
 
+      {!embedded && (
       <div className="card">
         <strong>Driver link</strong>
         <div className="linkbox">{link}</div>
@@ -252,9 +257,10 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
           <div className="muted">Or show this code to the driver. Scanning it with the phone camera opens the same link.</div>
         </div>
       </div>
+      )}
 
       <h2>Timeline</h2>
-      {events.length === 0 && <p className="muted">Waiting for the driver. Open the driver link on a phone.</p>}
+      {events.length === 0 && <p className="muted">Waiting for the driver.</p>}
       {events.map((ev: Event) => (
         <div key={ev.id} className={`card event ${ev.handled ? "handled" : ev.level}`}>
           <div className="row" style={{ justifyContent: "space-between" }}>
@@ -279,6 +285,6 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
           )}
         </div>
       ))}
-    </main>
+    </Shell>
   );
 }

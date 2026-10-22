@@ -80,7 +80,7 @@ export function decideSlip(slip: SlipReading, expectedKg: number): { level: Leve
 }
 
 export function decideText(status: string, confidence: number, hasPhoto: boolean): { level: Level; note: string } {
-  if (status === "Unknown") return { level: "review", note: "Could not tell the status. Check the original text." };
+  if (status === "Unknown") return { level: "review", note: "Not a standard status update. Read the translation, or check the original text." };
   if (confidence < MIN_CONFIDENCE) return { level: "review", note: "Low confidence. Check the original text." };
   if (status === "Loaded" && !hasPhoto) return { level: "review", note: "Loaded, but no slip photo yet." };
   return { level: "ok", note: "" };

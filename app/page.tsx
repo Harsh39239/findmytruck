@@ -67,6 +67,7 @@ export default function Home() {
         <div className="wrap navin">
           <a className="navbrand" href="#top"><Logo /><span>FindMyTruck</span></a>
           <nav className="navlinks" aria-label="Sections">
+            <a href="/demo">Demo</a>
             <a href="#how">How it works</a>
             <a href="#features">Features</a>
             <a href="#trust">Trust</a>
@@ -86,7 +87,8 @@ export default function Home() {
               the weighment slip. Managers see every truck on one phone screen.
             </p>
             <div className="ctas">
-              <a className="cta" href="/app">Try the live app</a>
+              <a className="cta" href="/demo">Watch the demo</a>
+              <a className="cta ghost" href="/app">Open the app</a>
               <a className="cta ghost" href={GITHUB}>View the code</a>
             </div>
             <RoadLorry />
