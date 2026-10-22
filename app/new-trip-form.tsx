@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { buildRoute } from "@/lib/geo";
-import { LABELS, LANGUAGES } from "@/lib/labels";
+import { LABELS } from "@/lib/labels";
 import { normalizePhone } from "@/lib/rules";
-import type { Language, RouteInfo, Trip } from "@/lib/store";
+import type { RouteInfo, Trip } from "@/lib/store";
 import { Brand } from "./ui";
 
 export type Invite = { configured: boolean; sent: boolean; results: { via: string; sent: boolean; error?: string }[] };
@@ -43,7 +43,7 @@ export default function NewTripForm({ onCreated, onCancel }: { onCreated: (c: Cr
     const res = await fetch("/api/trip", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...values, route }),
+      body: JSON.stringify({ ...values, language: "auto", route }), // the driver picks their language by replying
     });
     const data = await res.json();
     setBusy("");
@@ -55,8 +55,7 @@ export default function NewTripForm({ onCreated, onCancel }: { onCreated: (c: Cr
       if (data.invite?.sent) chat.close(); // already delivered automatically on WhatsApp and/or SMS
       else {
         // Messaging is not connected: open WhatsApp with the driver's web link ready for the manager to send.
-        const lang = (values.language === "auto" ? "en" : values.language) as Language;
-        const text = LABELS[lang].invite.replace("{url}", `${window.location.origin}/driver/${data.id}`);
+        const text = LABELS.en.invite.replace("{url}", `${window.location.origin}/driver/${data.id}`);
         chat.location.href = `https://wa.me/${toPhone.replace("+", "")}?text=${encodeURIComponent(text)}`;
       }
     }
@@ -81,11 +80,6 @@ export default function NewTripForm({ onCreated, onCancel }: { onCreated: (c: Cr
           10-digit Indian number, or +country code. The driver is messaged on WhatsApp and SMS in all four languages and
           picks theirs by replying. The number is used only to message this driver.
         </div>
-        <label>Driver&apos;s language</label>
-        <select name="language" defaultValue="auto">
-          <option value="auto">Let the driver choose (recommended)</option>
-          {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
-        </select>
         <div className="grid2">
           <div><label>Material</label><input name="material" placeholder="Steel coils" /></div>
           <div><label>Expected weight (kg)</label><input name="expectedKg" type="number" inputMode="numeric" placeholder="18500" /></div>
