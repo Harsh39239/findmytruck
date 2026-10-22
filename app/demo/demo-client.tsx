@@ -216,6 +216,7 @@ export default function DemoClient() {
             ? <button className="secondary" onClick={halt}>Stop</button>
             : <button onClick={play} disabled={!!error && !tripId}>Play the demo</button>}
           <button className="secondary" onClick={() => { stop.current = true; setPlaying(false); restart(); }}>Restart</button>
+          <Link href="/driver" className="hint" style={{ alignSelf: "center" }}>Driver practice</Link>
         </div>
       </header>
 
