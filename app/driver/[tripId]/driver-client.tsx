@@ -11,13 +11,13 @@ function shrink(file: File): Promise<string> {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const scale = Math.min(1, 1400 / Math.max(img.width, img.height));
+      const scale = Math.min(1, 1000 / Math.max(img.width, img.height));
       const canvas = document.createElement("canvas");
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
       canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
-      resolve(canvas.toDataURL("image/jpeg", 0.8));
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
     };
     img.onerror = () => reject(new Error("Could not open this photo"));
     img.src = url;
