@@ -2,11 +2,12 @@
 /* eslint-disable @next/next/no-img-element -- slip photos are small data URLs, not files Next can optimise */
 
 import dynamic from "next/dynamic";
+import QRCode from "qrcode";
 import { useCallback, useEffect, useState } from "react";
 import { buildRoute } from "@/lib/geo";
 import { LABELS, LANGUAGES } from "@/lib/labels";
 import { STATUSES, normalizePhone, routeProgress, stageIndex } from "@/lib/rules";
-import type { Event, RouteInfo, Trip } from "@/lib/store";
+import type { Event, Language, RouteInfo, Trip } from "@/lib/store";
 
 const RouteMap = dynamic(() => import("./route-map"), { ssr: false, loading: () => <div className="map" /> });
 
@@ -24,6 +25,15 @@ function ago(from: number, now: number) {
 
 function duration(min: number) {
   return min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
+}
+
+// A QR code of the driver link: the driver scans it with the phone camera and the page opens.
+function Qr({ url }: { url: string }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    QRCode.toDataURL(url, { margin: 1, width: 240 }).then(setSrc).catch(() => setSrc(""));
+  }, [url]);
+  return src ? <img className="qr" src={src} alt="QR code for the driver link" /> : null;
 }
 
 function Brand() {
@@ -95,6 +105,11 @@ export default function ManagerPage() {
     if ((from && !to) || (!from && to)) return setError("Enter both the pickup place and the drop place, or leave both empty.");
     if (values.phone?.trim() && !normalizePhone(values.phone)) return setError("Enter a valid phone number, for example 98765 43210");
 
+    // Open the WhatsApp tab right now (while the click still counts), and fill it in once the trip exists.
+    const toPhone = normalizePhone(values.phone ?? "");
+    const chat = toPhone ? window.open("", "_blank") : null;
+    chat?.document.write("Opening WhatsApp...");
+
     let route: RouteInfo | undefined;
     if (from && to) {
       setBusy("Finding the road route...");
@@ -112,7 +127,17 @@ export default function ManagerPage() {
     });
     const data = await res.json();
     setBusy("");
-    if (!res.ok) return setError(data.error ?? "Something went wrong");
+    if (!res.ok) {
+      chat?.close();
+      return setError(data.error ?? "Something went wrong");
+    }
+    if (chat && toPhone) {
+      if (data.invite?.sent) chat.close(); // already delivered automatically
+      else {
+        const text = LABELS[values.language as Language].invite.replace("{url}", `${window.location.origin}/driver/${data.id}`);
+        chat.location.href = `https://wa.me/${toPhone.replace("+", "")}?text=${encodeURIComponent(text)}`;
+      }
+    }
     try { localStorage.setItem(STORAGE_KEY, data.id); } catch {}
     setPhone(values.phone ?? "");
     setInvite(data.invite ?? null);
@@ -253,6 +278,10 @@ export default function ManagerPage() {
             type="button"
             onClick={() => { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
           >{copied ? "Copied ✓" : "Copy link"}</button>
+        </div>
+        <div className="qrbox">
+          <Qr url={link} />
+          <div className="muted">Or show this code to the driver. Scanning it with the phone camera opens the same link.</div>
         </div>
       </div>
 
