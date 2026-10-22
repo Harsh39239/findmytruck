@@ -9,6 +9,40 @@ export const STATUSES = ["Reached", "Loaded", "Left", "Delivered"] as const;
 
 const kg = (n: number) => n.toLocaleString("en-US");
 
+type Stamped = { status: string; level: Level; at: number; handled?: boolean };
+
+// An event counts once it is OK, or the manager has handled it.
+const confirmed = (events: Stamped[], status: string) =>
+  events.filter((e) => e.status === status && (e.level === "ok" || e.handled));
+
+// How far along the stepper the trip is: -1 = nothing yet, 0 = Reached ... 3 = Delivered.
+export function stageIndex(events: Stamped[]) {
+  let stage = -1;
+  STATUSES.forEach((s, i) => { if (confirmed(events, s).length) stage = i; });
+  return stage;
+}
+
+// Estimated share of the road covered (0 to 1). There is no live GPS: once the driver taps "Left",
+// the lorry moves along the route at the road's estimated driving time. `speed` > 1 fast-forwards for demos.
+export function routeProgress(events: Stamped[], durationMin: number, speed: number, now: number) {
+  if (confirmed(events, "Delivered").length) return 1;
+  const left = confirmed(events, "Left");
+  if (!left.length) return 0;
+  const startedAt = left[left.length - 1].at;
+  const travelMs = (Math.max(durationMin, 1) * 60000) / Math.max(speed, 1);
+  return Math.min(0.98, Math.max(0, (now - startedAt) / travelMs));
+}
+
+// Cleans a phone number to +<country code><number>. A bare 10-digit number is treated as Indian (+91).
+export function normalizePhone(input: string): string | null {
+  const digits = input.replace(/[^\d]/g, "");
+  if (/^\d{10}$/.test(digits)) return `+91${digits}`;
+  if (/^0\d{10}$/.test(digits)) return `+91${digits.slice(1)}`;
+  if (input.trim().startsWith("+") && /^\d{11,15}$/.test(digits)) return `+${digits}`;
+  if (/^91\d{10}$/.test(digits)) return `+${digits}`;
+  return null;
+}
+
 // A message with no letters in any language (for example "????" or "...") can't be a status.
 export const hasReadableText = (text: string) => /\p{L}/u.test(text);
 

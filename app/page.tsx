@@ -1,27 +1,58 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- slip photos are small data URLs, not files Next can optimise */
 
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
-import { LANGUAGES } from "@/lib/labels";
-import type { Event, Trip } from "@/lib/store";
+import { buildRoute } from "@/lib/geo";
+import { LABELS, LANGUAGES } from "@/lib/labels";
+import { STATUSES, normalizePhone, routeProgress, stageIndex } from "@/lib/rules";
+import type { Event, RouteInfo, Trip } from "@/lib/store";
+
+const RouteMap = dynamic(() => import("./route-map"), { ssr: false, loading: () => <div className="map" /> });
 
 const STORAGE_KEY = "findmytruck-trip";
+const levelText = { ok: "OK", review: "REVIEW", flag: "FLAG" } as const;
+
+type Invite = { sent: boolean; via?: string; error?: string };
 
 function ago(from: number, now: number) {
   const s = Math.max(0, Math.round((now - from) / 1000));
   if (s < 60) return `${s} sec ago`;
-  return `${Math.round(s / 60)} min ago`;
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  return `${Math.round(s / 3600)} h ago`;
 }
 
-const levelText = { ok: "OK", review: "REVIEW", flag: "FLAG" } as const;
+function duration(min: number) {
+  return min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
+}
+
+function Brand() {
+  return (
+    <div className="brand">
+      <div className="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M1 6h13v10H1zM14 9h4l4 4v3h-8z" /><circle cx="6" cy="18" r="2" fill="#1f5eff" /><circle cx="18" cy="18" r="2" fill="#1f5eff" />
+        </svg>
+      </div>
+      <div>
+        <h1>FindMyTruck</h1>
+        <small>Know your truck&apos;s status without a call</small>
+      </div>
+    </div>
+  );
+}
 
 export default function ManagerPage() {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState("");
   const [now, setNow] = useState(0); // set by the first timer tick
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false); // false until we know whether a saved trip exists
+  const [invite, setInvite] = useState<Invite | null>(null);
+  const [routeNote, setRouteNote] = useState("");
+  const [phone, setPhone] = useState(""); // only kept in memory, for the one-tap send buttons
+  const [demoSpeed, setDemoSpeed] = useState(true);
 
   const load = useCallback(async (id: string) => {
     try {
@@ -56,23 +87,43 @@ export default function ManagerPage() {
   async function createTrip(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    setBusy(true);
+    setRouteNote("");
     const form = new FormData(e.currentTarget);
+    const values = Object.fromEntries(form) as Record<string, string>;
+    const from = (values.from ?? "").trim();
+    const to = (values.to ?? "").trim();
+    if ((from && !to) || (!from && to)) return setError("Enter both the pickup place and the drop place, or leave both empty.");
+    if (values.phone?.trim() && !normalizePhone(values.phone)) return setError("Enter a valid phone number, for example 98765 43210");
+
+    let route: RouteInfo | undefined;
+    if (from && to) {
+      setBusy("Finding the road route...");
+      try {
+        route = await buildRoute(from, to);
+      } catch (err) {
+        setRouteNote(`${(err as Error).message}. The trip was created without a map.`);
+      }
+    }
+    setBusy("Creating trip...");
     const res = await fetch("/api/trip", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.fromEntries(form)),
+      body: JSON.stringify({ ...values, route }),
     });
     const data = await res.json();
-    setBusy(false);
+    setBusy("");
     if (!res.ok) return setError(data.error ?? "Something went wrong");
     try { localStorage.setItem(STORAGE_KEY, data.id); } catch {}
+    setPhone(values.phone ?? "");
+    setInvite(data.invite ?? null);
     setTrip(data);
   }
 
   function newTrip() {
     try { localStorage.removeItem(STORAGE_KEY); } catch {}
     setTrip(null);
+    setInvite(null);
+    setRouteNote("");
   }
 
   async function markHandled(eventId: string) {
@@ -88,28 +139,39 @@ export default function ManagerPage() {
     load(trip.id);
   }
 
-  if (!ready) return <main><p className="muted">Loading...</p></main>;
+  if (!ready) return <main><Brand /><p className="muted">Loading...</p></main>;
 
   if (!trip) {
     return (
       <main>
-        <h1>FindMyTruck</h1>
-        <p className="muted">Create a trip, send the driver the link, and watch the status come in.</p>
+        <Brand />
         <form className="card" onSubmit={createTrip}>
-          <label>Truck number</label>
-          <input name="truck" placeholder="MH12 AB 1234" />
-          <label>Driver name</label>
-          <input name="driver" placeholder="Ramesh" />
+          <strong>New trip</strong>
+          <p className="muted" style={{ margin: "2px 0 0" }}>The driver gets a link on their phone as soon as you create it.</p>
+
+          <div className="grid2">
+            <div><label>Truck number</label><input name="truck" placeholder="MH12 AB 1234" /></div>
+            <div><label>Driver name</label><input name="driver" placeholder="Ramesh" /></div>
+          </div>
+          <label>Driver&apos;s phone (the link is sent here)</label>
+          <input name="phone" type="tel" inputMode="tel" placeholder="98765 43210" />
+          <div className="hint">10-digit Indian number, or +country code. Not saved after sending.</div>
           <label>Driver&apos;s language</label>
           <select name="language" defaultValue="hi">
             {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
           </select>
-          <label>Material</label>
-          <input name="material" placeholder="Steel coils" />
-          <label>Expected weight (kg)</label>
-          <input name="expectedKg" type="number" inputMode="numeric" placeholder="18500" />
-          {error && <div className="error">{error}</div>}
-          <p><button type="submit" disabled={busy}>{busy ? "Creating..." : "Create trip"}</button></p>
+          <div className="grid2">
+            <div><label>Material</label><input name="material" placeholder="Steel coils" /></div>
+            <div><label>Expected weight (kg)</label><input name="expectedKg" type="number" inputMode="numeric" placeholder="18500" /></div>
+          </div>
+          <div className="grid2">
+            <div><label>From (pickup)</label><input name="from" placeholder="Pune" /></div>
+            <div><label>To (drop)</label><input name="to" placeholder="Mumbai" /></div>
+          </div>
+          <div className="hint">Add both places to see the road route and the lorry on a map.</div>
+
+          {error && <p className="error">{error}</p>}
+          <p><button className="wide" type="submit" disabled={!!busy}>{busy || "Create trip and send link"}</button></p>
         </form>
       </main>
     );
@@ -119,39 +181,93 @@ export default function ManagerPage() {
   const last = trip.events[trip.events.length - 1];
   const link = `${window.location.origin}/driver/${trip.id}`;
   const open = trip.events.filter((e) => e.level !== "ok" && !e.handled).length;
+  const stage = stageIndex(trip.events);
+  const speed = demoSpeed ? 60 : 1;
+  const route = trip.route;
+  const progress = route ? routeProgress(trip.events, route.durationMin, speed, now) : 0;
+  const message = LABELS[trip.language].invite.replace("{url}", link);
+  const digits = (normalizePhone(phone) ?? "").replace("+", "");
 
   return (
     <main>
-      <h1>{trip.truck}</h1>
-      <p className="muted">{trip.driver} · {trip.material} · expected {trip.expectedKg.toLocaleString("en-US")} kg</p>
+      <Brand />
+
+      <div className="row" style={{ alignItems: "flex-start", marginBottom: 12 }}>
+        <div style={{ flex: 3 }}>
+          <strong style={{ fontSize: "1.2rem" }}>{trip.truck}</strong>
+          <div className="muted">{trip.driver} · {trip.material} · {trip.expectedKg.toLocaleString("en-US")} kg expected</div>
+        </div>
+        <button className="secondary" style={{ flex: 1 }} onClick={newTrip}>New trip</button>
+      </div>
+
+      <div className="steps">
+        {STATUSES.map((s, i) => (
+          <div key={s} className={`step ${i <= stage ? "done" : ""} ${i === stage ? "current" : ""}`}><i />{s}</div>
+        ))}
+      </div>
+
+      <div className="stats">
+        <div className="stat"><b>{last ? ago(last.at, now) : "None yet"}</b><span>Last update</span></div>
+        <div className={`stat ${open > 0 ? "alert" : ""}`}><b>{open}</b><span>Need your decision</span></div>
+        <div className="stat">
+          <b>{route ? `${route.distanceKm} km` : `${trip.expectedKg.toLocaleString("en-US")} kg`}</b>
+          <span>{route ? `About ${duration(route.durationMin)}` : "Expected load"}</span>
+        </div>
+      </div>
+
+      {invite?.sent && <div className="banner good">Link sent to the driver by {invite.via} (number ending {trip.phoneHint}).</div>}
+      {invite && !invite.sent && (
+        <div className="banner">Not sent automatically ({invite.error}). Use the buttons below to send it in one tap.</div>
+      )}
+      {routeNote && <div className="banner">{routeNote}</div>}
+
+      {route && (
+        <div className="card mapcard">
+          <div className="mapbar">
+            <strong>{route.from} → {route.to}</strong>
+            <select value={demoSpeed ? "demo" : "real"} onChange={(e) => setDemoSpeed(e.target.value === "demo")} aria-label="Lorry speed">
+              <option value="demo">Demo speed (60x)</option>
+              <option value="real">Real time</option>
+            </select>
+          </div>
+          <RouteMap route={route} events={trip.events} speed={speed} />
+          <div className="mapnote">
+            {stage >= 3 ? "Delivered. " : stage >= 2 ? `Estimated ${Math.round(progress * 100)}% of the way. ` : "Waiting for the driver to leave. "}
+            The lorry position is an estimate from the driver&apos;s status and the road time, not live GPS.
+          </div>
+        </div>
+      )}
 
       <div className="card">
-        <strong>Last update: {last ? ago(last.at, now) : "nothing yet"}</strong>
-        <div className={open > 0 ? "error" : "muted"} style={{ marginTop: 4 }}>
-          {open > 0 ? `${open} ${open === 1 ? "item needs" : "items need"} your decision` : "Nothing needs your decision"}
-        </div>
+        <strong>Driver link</strong>
         <div className="linkbox">{link}</div>
-        <div className="row">
+        <div className="btns">
+          <a href={`https://wa.me/${digits}?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+            <button className="wa wide" type="button">Send on WhatsApp</button>
+          </a>
+          <a href={`sms:${phone ? normalizePhone(phone) ?? "" : ""}?body=${encodeURIComponent(message)}`} style={{ textDecoration: "none" }}>
+            <button className="secondary wide" type="button">Send SMS</button>
+          </a>
           <button
-            className="secondary"
+            className="secondary full"
+            type="button"
             onClick={() => { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-          >{copied ? "Copied ✓" : "Copy driver link"}</button>
-          <button className="secondary" onClick={newTrip}>New trip</button>
+          >{copied ? "Copied ✓" : "Copy link"}</button>
         </div>
       </div>
 
       <h2>Timeline</h2>
-      {events.length === 0 && <p className="muted">Waiting for the driver. Open the driver link on another phone or tab.</p>}
+      {events.length === 0 && <p className="muted">Waiting for the driver. Open the driver link on a phone.</p>}
       {events.map((ev: Event) => (
         <div key={ev.id} className={`card event ${ev.handled ? "handled" : ev.level}`}>
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <strong>{ev.status}</strong>
+            <span className="title">{ev.status}</span>
             {ev.handled
-              ? <span className="badge handled">HANDLED</span>
-              : <span className={`badge ${ev.level}`}>{levelText[ev.level]}</span>}
+              ? <span className="badge handled" style={{ flex: "none" }}>HANDLED</span>
+              : <span className={`badge ${ev.level}`} style={{ flex: "none" }}>{levelText[ev.level]}</span>}
           </div>
           <div className="muted">{new Date(ev.at).toLocaleTimeString()} · {ago(ev.at, now)}</div>
-          {ev.note && <p style={{ margin: "6px 0" }}><strong>{ev.note}</strong></p>}
+          {ev.note && <p className="note">{ev.note}</p>}
           <div className="pair">
             <span>Original</span><span>{ev.original}</span>
             {ev.kind === "text" && (<><span>Translation</span><span>{ev.translation || "—"}</span></>)}
@@ -159,7 +275,7 @@ export default function ManagerPage() {
           </div>
           {ev.photo && <img src={ev.photo} alt="Slip" />}
           {ev.level !== "ok" && !ev.handled && (
-            <p><button className="secondary" onClick={() => markHandled(ev.id)}>Mark as handled</button></p>
+            <p style={{ marginBottom: 0 }}><button className="secondary" onClick={() => markHandled(ev.id)}>Mark as handled</button></p>
           )}
         </div>
       ))}

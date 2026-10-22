@@ -17,10 +17,20 @@ export type Event = {
   handled?: boolean; // the manager has dealt with a review/flag item
 };
 
+export type RouteInfo = {
+  from: string;
+  to: string;
+  points: [number, number][]; // [lat, lng] along the road, thinned out
+  distanceKm: number;
+  durationMin: number;
+};
+
 export type Trip = {
   id: string;
   truck: string;
   driver: string;
+  phoneHint?: string; // last 4 digits only; the full number is never stored
+  route?: RouteInfo;
   language: Language;
   material: string;
   expectedKg: number;

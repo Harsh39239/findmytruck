@@ -1,7 +1,36 @@
 // Run with: npm test
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideSlip, decideText, hasReadableText } from "../lib/rules.ts";
+import { decideSlip, decideText, hasReadableText, normalizePhone, routeProgress, stageIndex } from "../lib/rules.ts";
+
+test("phone numbers are cleaned, bad ones rejected", () => {
+  assert.equal(normalizePhone("98765 43210"), "+919876543210");
+  assert.equal(normalizePhone("098765-43210"), "+919876543210");
+  assert.equal(normalizePhone("+1 415 555 2671"), "+14155552671");
+  assert.equal(normalizePhone("12345"), null);
+  assert.equal(normalizePhone("abc"), null);
+});
+
+test("lorry stays at the start until the driver leaves, then moves, and ends when delivered", () => {
+  const ev = (status, at, level = "ok") => ({ status, at, level });
+  const t0 = 1_000_000;
+  assert.equal(routeProgress([], 120, 1, t0), 0);
+  assert.equal(routeProgress([ev("Reached", t0), ev("Loaded", t0)], 120, 1, t0 + 1e6), 0);
+  const left = [ev("Left", t0)];
+  assert.equal(routeProgress(left, 120, 1, t0 + 60 * 60000), 0.5); // 1 h of a 2 h trip
+  assert.equal(routeProgress(left, 120, 60, t0 + 60000), 0.5); // demo speed: 1 min = 1 h
+  assert.equal(routeProgress(left, 120, 1, t0 + 10 * 3600000), 0.98); // never "arrives" by itself
+  assert.equal(routeProgress([...left, ev("Delivered", t0 + 1)], 120, 1, t0 + 5), 1);
+  assert.equal(routeProgress([ev("Left", t0, "review")], 120, 1, t0 + 60000), 0); // unconfirmed does not count
+});
+
+test("stepper counts only confirmed statuses", () => {
+  const ev = (status, level = "ok", handled = false) => ({ status, at: 1, level, handled });
+  assert.equal(stageIndex([]), -1);
+  assert.equal(stageIndex([ev("Reached"), ev("Loaded", "review")]), 0);
+  assert.equal(stageIndex([ev("Reached"), ev("Loaded", "review", true)]), 1);
+  assert.equal(stageIndex([ev("Delivered")]), 3);
+});
 
 test("text with no letters is rejected, real words in any script pass (Test 3)", () => {
   assert.equal(hasReadableText("???? ????"), false);

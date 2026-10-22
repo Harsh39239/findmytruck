@@ -74,8 +74,25 @@ export default function DriverClient({ tripId }: { tripId: string }) {
 
   return (
     <main>
-      <h1>{trip.truck}</h1>
-      <p className="muted">{trip.material}</p>
+      <div className="brand">
+        <div className="brand-mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M1 6h13v10H1zM14 9h4l4 4v3h-8z" /><circle cx="6" cy="18" r="2" fill="#1f5eff" /><circle cx="18" cy="18" r="2" fill="#1f5eff" />
+          </svg>
+        </div>
+        <div>
+          <h1>{trip.truck}</h1>
+          <small>{trip.material}</small>
+        </div>
+      </div>
+
+      {trip.route && (
+        <div className="card routebar">
+          <span className="dot" style={{ background: "#15803d" }} />{trip.route.from}
+          <span className="muted">→</span>
+          <span className="dot" style={{ background: "#b91c1c" }} />{trip.route.to}
+        </div>
+      )}
 
       <div className="bigbtns">
         {STATUSES.map((s) => (
@@ -83,22 +100,17 @@ export default function DriverClient({ tripId }: { tripId: string }) {
         ))}
       </div>
 
-      <p>
-        <label className="camera">
-          <span style={{ display: "block", textAlign: "center", padding: 18, borderRadius: 10, background: "var(--accent)", color: "#fff", fontWeight: 700, fontSize: "1.1rem" }}>
-            📷 {t.camera}
-          </span>
-          <input type="file" accept="image/*" capture="environment" onChange={onPhoto} disabled={busy} style={{ display: "none" }} />
-        </label>
-      </p>
+      <label className="camera">
+        {t.camera}
+        <input type="file" accept="image/*" capture="environment" onChange={onPhoto} disabled={busy} style={{ display: "none" }} />
+      </label>
 
       <div className="card">
         <textarea rows={3} value={text} placeholder={t.placeholder} onChange={(e) => setText(e.target.value)} />
-        <p><button disabled={busy || !text.trim()} onClick={() => send({ kind: "text", text })}>{t.send}</button></p>
+        <p style={{ marginBottom: 0 }}><button disabled={busy || !text.trim()} onClick={() => send({ kind: "text", text })}>{t.send}</button></p>
       </div>
 
-      {busy && <p className="muted">...</p>}
-      {message && <p><strong>{message}</strong></p>}
+      {(busy || message) && <div className="toast">{busy ? "..." : message}</div>}
     </main>
   );
 }

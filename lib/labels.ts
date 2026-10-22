@@ -18,6 +18,7 @@ export const LABELS: Record<Language, Record<string, string>> = {
     placeholder: "यहाँ लिखें...",
     send: "भेजें",
     sent: "भेज दिया ✓",
+    invite: "FindMyTruck: अपनी ट्रिप का हाल बताने के लिए यह लिंक खोलें: {url}",
   },
   ta: {
     Reached: "வந்துவிட்டேன்",
@@ -28,6 +29,7 @@ export const LABELS: Record<Language, Record<string, string>> = {
     placeholder: "இங்கே எழுதவும்...",
     send: "அனுப்பு",
     sent: "அனுப்பப்பட்டது ✓",
+    invite: "FindMyTruck: உங்கள் பயண நிலையைத் தெரிவிக்க இந்த இணைப்பைத் திறக்கவும்: {url}",
   },
   ml: {
     Reached: "എത്തി",
@@ -38,6 +40,7 @@ export const LABELS: Record<Language, Record<string, string>> = {
     placeholder: "ഇവിടെ എഴുതുക...",
     send: "അയയ്ക്കുക",
     sent: "അയച്ചു ✓",
+    invite: "FindMyTruck: നിങ്ങളുടെ യാത്രയുടെ വിവരം അറിയിക്കാൻ ഈ ലിങ്ക് തുറക്കുക: {url}",
   },
   en: {
     Reached: "Reached",
@@ -48,5 +51,6 @@ export const LABELS: Record<Language, Record<string, string>> = {
     placeholder: "Type here...",
     send: "Send",
     sent: "Sent ✓",
+    invite: "FindMyTruck: open this link to update your trip: {url}",
   },
 };
