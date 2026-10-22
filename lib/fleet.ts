@@ -44,14 +44,42 @@ const SILENT = "findmytruck-silent-min";
 export function readSilentMin(): number {
   try {
     const n = Number(localStorage.getItem(SILENT));
-    return SILENT_OPTIONS.some((o) => o.min === n) ? n : 30;
+    return SILENT_OPTIONS.some((o) => o.min === n) ? n : 60;
   } catch {
-    return 30;
+    return 60;
   }
 }
 
 export function writeSilentMin(min: number) {
   try { localStorage.setItem(SILENT, String(min)); } catch {}
+}
+
+// Automatic reminders: remind a quiet driver after this many minutes of silence, and again each time the same time
+// passes, until they reply (0 = never). The app does this while it is open in a browser.
+export const AUTO_OPTIONS = [
+  { min: 0, label: "Off" },
+  { min: 1, label: "After 1 minute (demo)" },
+  { min: 60, label: "After 1 hour" },
+  { min: 120, label: "After 2 hours" },
+  { min: 180, label: "After 3 hours" },
+  { min: 240, label: "After 4 hours" },
+  { min: 360, label: "After 6 hours" },
+];
+const AUTO = "findmytruck-auto-remind-min";
+
+export function readAutoMin(): number {
+  try {
+    const raw = localStorage.getItem(AUTO);
+    if (raw === null) return 60;
+    const n = Number(raw);
+    return AUTO_OPTIONS.some((o) => o.min === n) ? n : 60;
+  } catch {
+    return 60;
+  }
+}
+
+export function writeAutoMin(min: number) {
+  try { localStorage.setItem(AUTO, String(min)); } catch {}
 }
 
 // What "Remind driver" does when messaging is not connected: show it as sent (for demos), or open WhatsApp to send by hand.

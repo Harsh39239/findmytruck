@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { reminderMessage, type Lang } from "@/lib/chat";
+import { autoRemindDue, stageIndex } from "@/lib/rules";
 import { messagingConfigured, sendToDriver } from "@/lib/sms";
 import { getTrip, saveTrip } from "@/lib/store";
 
@@ -15,8 +16,16 @@ export async function POST(req: Request) {
   const trip = await getTrip(String(b?.tripId ?? ""));
   if (!trip) return NextResponse.json({ error: "Trip not found" }, { status: 404 });
 
+  // Automatic reminders come from the manager's open app. The server decides whether one is really due, so two
+  // open tabs can never send the same reminder twice.
+  const auto = b?.auto === true;
+  if (auto && !autoRemindDue(trip.events, trip.createdAt, stageIndex(trip.events), Date.now(), Number(b?.afterMin) || 0)) {
+    return NextResponse.json({ skipped: true });
+  }
+
   const lastReminder = [...trip.events].reverse().find((e) => e.status === "Reminder");
   if (lastReminder && Date.now() - lastReminder.at < COOLDOWN_MS) {
+    if (auto) return NextResponse.json({ skipped: true });
     return NextResponse.json({ error: "A reminder was just sent. Give the driver a moment." }, { status: 429 });
   }
 
@@ -34,6 +43,7 @@ export async function POST(req: Request) {
   const simulated = b?.simulate === true || (b?.demo === true && !configured); // never pretends when real sending works
   const results = !simulated && trip.phone ? await sendToDriver(trip.phone, message, "WhatsApp") : [];
   const sent = simulated || results.some((r) => r.sent);
+  if (auto && !sent) return NextResponse.json({ skipped: true }); // nothing went out, so nothing to record
 
   trip.events.push({
     id: crypto.randomUUID().slice(0, 8),
@@ -44,9 +54,9 @@ export async function POST(req: Request) {
     status: "Reminder",
     level: "ok",
     note: simulated
-      ? "Reminder sent on WhatsApp. (Demo mode: nothing was really delivered.)"
+      ? `${auto ? "Automatic reminder" : "Reminder"} sent on WhatsApp. (Demo mode: nothing was really delivered.)`
       : sent
-        ? "Reminder sent on WhatsApp."
+        ? `${auto ? "Automatic reminder" : "Reminder"} sent on WhatsApp.`
         : "Reminder prepared. It was not sent automatically.",
   });
   await saveTrip(trip);

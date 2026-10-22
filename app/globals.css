@@ -379,3 +379,12 @@ button.fleetcard.attn { border-color: var(--review); }
 .fleetitem.is-silent .fc-actions { border-color: var(--flag); border-top-color: var(--line); }
 .fc-actions > span { font-size: 0.85rem; }
 .fc-actions button { flex: none; padding: 8px 14px; font-size: 0.85rem; }
+
+/* ---------- settings screen ---------- */
+.setting { padding: 4px 0 14px; }
+.setting + .setting { border-top: 1px solid var(--line); padding-top: 14px; }
+.setting label { margin-top: 0; color: var(--text); font-size: 0.95rem; }
+.setting .hint { margin: 6px 0 0; }
+.statusline { display: flex; align-items: center; gap: 10px; }
+.dot { width: 11px; height: 11px; border-radius: 50%; background: #98a2b3; flex: none; }
+.dot.on { background: #16a34a; box-shadow: 0 0 0 4px color-mix(in srgb, #16a34a 25%, transparent); }

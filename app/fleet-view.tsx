@@ -2,18 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { STATUSES, lastDriverEvent, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
-import { SILENT_OPTIONS, parseTripCode, type SendMode } from "@/lib/fleet";
+import { parseTripCode, type SendMode } from "@/lib/fleet";
 import type { TripSummary } from "@/lib/store";
 import { Brand, Icon, Skeleton, ago, duration } from "./ui";
 
 type Props = {
   ids: string[];
   demoSpeed: boolean;
-  setDemoSpeed: (on: boolean) => void;
   silentMin: number;
-  setSilentMin: (min: number) => void;
   sendMode: SendMode;
-  setSendMode: (mode: SendMode) => void;
+  onSettings: () => void;
   onOpen: (id: string) => void;
   onNew: () => void;
   onAdd: (id: string) => void;
@@ -22,13 +20,12 @@ type Props = {
 
 type Filter = "all" | "need" | "road" | "done";
 
-export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, setSilentMin, sendMode, setSendMode, onOpen, onNew, onAdd, onMissing }: Props) {
+export default function FleetView({ ids, demoSpeed, silentMin, sendMode, onSettings, onOpen, onNew, onAdd, onMissing }: Props) {
   const [trips, setTrips] = useState<TripSummary[] | null>(null);
   const [now, setNow] = useState(0);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
-  const [settings, setSettings] = useState(false);
   const [reminding, setReminding] = useState<string | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
 
@@ -115,36 +112,11 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
     <main>
       <Brand
         right={
-          <button className="iconbtn" type="button" onClick={() => setSettings((s) => !s)} aria-label="Settings" aria-expanded={settings}>
-            <Icon name="clock" size={18} />
+          <button className="iconbtn" type="button" onClick={onSettings} aria-label="Settings">
+            <Icon name="settings" size={18} />
           </button>
         }
       />
-
-      {settings && (
-        <div className="card settings">
-          <div className="row">
-            <span className="muted" style={{ flex: 2 }}>Mark a driver silent after</span>
-            <select value={silentMin} onChange={(e) => setSilentMin(Number(e.target.value))} aria-label="Silent driver time" style={{ flex: 1.4 }}>
-              {SILENT_OPTIONS.map((o) => <option key={o.min} value={o.min}>{o.label}</option>)}
-            </select>
-          </div>
-          <div className="row" style={{ marginTop: 8 }}>
-            <span className="muted" style={{ flex: 2 }}>Remind driver, when messaging is not connected</span>
-            <select value={sendMode} onChange={(e) => setSendMode(e.target.value as SendMode)} aria-label="Reminder mode" style={{ flex: 1.4 }}>
-              <option value="demo">Show as sent (demo mode)</option>
-              <option value="manual">Open WhatsApp to send</option>
-            </select>
-          </div>
-          <div className="row" style={{ marginTop: 8 }}>
-            <span className="muted" style={{ flex: 2 }}>Lorry speed on maps</span>
-            <select value={demoSpeed ? "demo" : "real"} onChange={(e) => setDemoSpeed(e.target.value === "demo")} aria-label="Lorry speed" style={{ flex: 1.4 }}>
-              <option value="demo">Demo (60x)</option>
-              <option value="real">Real time</option>
-            </select>
-          </div>
-        </div>
-      )}
 
       <button className="wide newtrip" onClick={onNew}>+ New trip</button>
 

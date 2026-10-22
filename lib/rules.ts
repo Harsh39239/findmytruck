@@ -42,6 +42,18 @@ export function silentFor(events: { at: number; status?: string }[], createdAt: 
   return mins >= thresholdMin ? mins : 0;
 }
 
+// Is it time for an automatic reminder? The manager chooses how long a driver may stay quiet (1 hour, 2 hours, 3
+// hours ...). Once that long has passed since the driver last did anything, a reminder is due; after it, the next
+// one is due the same time later, until the driver answers. 0 means automatic reminders are off.
+export function autoRemindDue(events: { at: number; status?: string }[], createdAt: number, stage: number, now: number, afterMin: number) {
+  if (!afterMin || stage >= 3) return false;
+  const heard = lastDriverEvent(events);
+  const since = heard ? heard.at : createdAt;
+  let reference = since;
+  for (const e of events) if (e.status === "Reminder" && e.at > reference) reference = e.at;
+  return now - reference >= afterMin * 60000;
+}
+
 // Estimated share of the road covered (0 to 1). There is no live GPS: once the driver taps "Left",
 // the lorry moves along the route at the road's estimated driving time. `speed` > 1 fast-forwards for demos.
 export function routeProgress(events: Stamped[], durationMin: number, speed: number, now: number) {

@@ -107,3 +107,26 @@ test("with Twilio connected, a reminder goes out on WhatsApp only, never SMS", a
     Object.assign(process.env, saved);
   }
 });
+
+import { autoRemindDue } from "../lib/rules.ts";
+
+test("automatic reminders: after the chosen silence, then again each time that passes, until the driver replies", () => {
+  const min = 60000;
+  const t0 = 90_000_000;
+  const heard = [{ at: t0, status: "Reached" }];
+  // chosen: remind after 2 hours
+  assert.equal(autoRemindDue(heard, t0, 0, t0 + 119 * min, 120), false); // 1 h 59 min: not yet
+  assert.equal(autoRemindDue(heard, t0, 0, t0 + 121 * min, 120), true); // past 2 hours: remind
+  // reminded at 2 h: nothing more until another 2 hours have passed
+  const reminded = [...heard, { at: t0 + 121 * min, status: "Reminder" }];
+  assert.equal(autoRemindDue(reminded, t0, 0, t0 + 200 * min, 120), false);
+  assert.equal(autoRemindDue(reminded, t0, 0, t0 + 242 * min, 120), true);
+  // the driver answers: the clock starts again from their message
+  const replied = [...reminded, { at: t0 + 250 * min, status: "Left" }];
+  assert.equal(autoRemindDue(replied, t0, 2, t0 + 300 * min, 120), false);
+  assert.equal(autoRemindDue(replied, t0, 2, t0 + 371 * min, 120), true);
+  // a trip nobody has touched counts from when it was created; delivered trips and "Off" never remind
+  assert.equal(autoRemindDue([], t0, -1, t0 + 61 * min, 60), true);
+  assert.equal(autoRemindDue(heard, t0, 3, t0 + 900 * min, 60), false);
+  assert.equal(autoRemindDue(heard, t0, 0, t0 + 900 * min, 0), false);
+});

@@ -1,18 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { readDemoSpeed, readIds, readSendMode, readSilentMin, writeDemoSpeed, writeIds, writeSendMode, writeSilentMin, type SendMode } from "@/lib/fleet";
+import {
+  readAutoMin, readDemoSpeed, readIds, readSendMode, readSilentMin,
+  writeAutoMin, writeDemoSpeed, writeIds, writeSendMode, writeSilentMin, type SendMode,
+} from "@/lib/fleet";
+import { autoRemindDue, stageIndex } from "@/lib/rules";
+import type { TripSummary } from "@/lib/store";
 import FleetView from "./fleet-view";
 import NewTripForm, { type Created } from "./new-trip-form";
+import SettingsView from "./settings-view";
 import TripDetail from "./trip-detail";
 import { Brand } from "./ui";
 
-// Three screens, chosen by the part of the address after "#":  "#/" = all trucks,
-// "#/new" = new trip form, "#/trip/<code>" = one truck. That also makes every truck linkable.
+// Screens, chosen by the part of the address after "#":  "#/" = all trucks, "#/new" = new trip form,
+// "#/settings" = settings, "#/trip/<code>" = one truck. That also makes every truck linkable.
 function screenFromHash() {
   const h = window.location.hash;
   const m = h.match(/^#\/trip\/([a-z0-9]+)$/i);
   if (m) return `trip:${m[1].toLowerCase()}`;
+  if (h === "#/settings") return "settings";
   return h === "#/new" ? "new" : "fleet";
 }
 
@@ -20,7 +27,8 @@ export default function ManagerPage() {
   const [screen, setScreen] = useState<string | null>(null); // null until we have read the address and saved list
   const [ids, setIds] = useState<string[]>([]);
   const [demoSpeed, setDemo] = useState(true);
-  const [silentMin, setSilent] = useState(30);
+  const [silentMin, setSilent] = useState(60);
+  const [autoMin, setAuto] = useState(60);
   const [sendMode, setSend] = useState<SendMode>("demo");
   const [created, setCreated] = useState<Created | null>(null);
 
@@ -29,6 +37,7 @@ export default function ManagerPage() {
       setIds(readIds());
       setDemo(readDemoSpeed());
       setSilent(readSilentMin());
+      setAuto(readAutoMin());
       setSend(readSendMode());
       setScreen(screenFromHash());
     }, 0);
@@ -36,6 +45,37 @@ export default function ManagerPage() {
     window.addEventListener("hashchange", onHash);
     return () => { clearTimeout(start); window.removeEventListener("hashchange", onHash); };
   }, []);
+
+  // Automatic reminders: while the app is open, a driver who has been quiet for the chosen time is reminded on
+  // WhatsApp, and again each time that time passes. The server double-checks that a reminder is really due.
+  useEffect(() => {
+    if (!autoMin || ids.length === 0) return;
+    let running = false;
+    const run = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const res = await fetch(`/api/trips?ids=${ids.join(",")}`);
+        if (res.ok) {
+          const data = await res.json();
+          for (const t of data.trips as TripSummary[]) {
+            if (!autoRemindDue(t.events, t.createdAt, stageIndex(t.events), Date.now(), autoMin)) continue;
+            await fetch("/api/remind", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ tripId: t.id, auto: true, afterMin: autoMin, demo: sendMode === "demo" }),
+            });
+          }
+        }
+      } catch {
+        // Offline for a moment: try again next minute.
+      }
+      running = false;
+    };
+    const first = setTimeout(run, 5000);
+    const timer = setInterval(run, 60000);
+    return () => { clearTimeout(first); clearInterval(timer); };
+  }, [ids, autoMin, sendMode]);
 
   const go = (hash: string) => { window.location.hash = hash; };
 
@@ -71,6 +111,11 @@ export default function ManagerPage() {
     writeSilentMin(min);
   }
 
+  function setAutoMin(min: number) {
+    setAuto(min);
+    writeAutoMin(min);
+  }
+
   if (screen === null) return <main><Brand /><p className="muted">Loading...</p></main>;
 
   if (screen.startsWith("trip:")) {
@@ -91,6 +136,22 @@ export default function ManagerPage() {
     );
   }
 
+  if (screen === "settings") {
+    return (
+      <SettingsView
+        autoMin={autoMin}
+        setAutoMin={setAutoMin}
+        silentMin={silentMin}
+        setSilentMin={setSilentMin}
+        sendMode={sendMode}
+        setSendMode={setSendMode}
+        demoSpeed={demoSpeed}
+        setDemoSpeed={setDemoSpeed}
+        onBack={() => go("#/")}
+      />
+    );
+  }
+
   // First visit (no trucks yet) goes straight to the form.
   if (screen === "new" || ids.length === 0) {
     return (
@@ -105,11 +166,9 @@ export default function ManagerPage() {
     <FleetView
       ids={ids}
       demoSpeed={demoSpeed}
-      setDemoSpeed={setDemoSpeed}
       silentMin={silentMin}
-      setSilentMin={setSilentMin}
       sendMode={sendMode}
-      setSendMode={setSendMode}
+      onSettings={() => go("#/settings")}
       onOpen={(id) => go(`#/trip/${id}`)}
       onNew={() => go("#/new")}
       onAdd={(id) => { addId(id); go(`#/trip/${id}`); }}
