@@ -491,3 +491,4 @@ button.wa { color: #fff; background: #12803f; }
 .stat b, .stat.good b { color: #fff; }
 .stat.alert b { color: #ffb4b4; }
 .stat span { color: #c3cbe0; }
+.tabs button span, .tabs button.on span { color: #fff !important; }
