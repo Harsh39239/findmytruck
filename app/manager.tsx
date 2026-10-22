@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { readDemoSpeed, readIds, readSilentMin, writeDemoSpeed, writeIds, writeSilentMin } from "@/lib/fleet";
+import { readDemoSpeed, readIds, readSendMode, readSilentMin, writeDemoSpeed, writeIds, writeSendMode, writeSilentMin, type SendMode } from "@/lib/fleet";
 import FleetView from "./fleet-view";
 import NewTripForm, { type Created } from "./new-trip-form";
 import TripDetail from "./trip-detail";
@@ -21,6 +21,7 @@ export default function ManagerPage() {
   const [ids, setIds] = useState<string[]>([]);
   const [demoSpeed, setDemo] = useState(true);
   const [silentMin, setSilent] = useState(30);
+  const [sendMode, setSend] = useState<SendMode>("demo");
   const [created, setCreated] = useState<Created | null>(null);
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function ManagerPage() {
       setIds(readIds());
       setDemo(readDemoSpeed());
       setSilent(readSilentMin());
+      setSend(readSendMode());
       setScreen(screenFromHash());
     }, 0);
     const onHash = () => setScreen(screenFromHash());
@@ -59,6 +61,11 @@ export default function ManagerPage() {
     writeDemoSpeed(on);
   }
 
+  function setSendMode(mode: SendMode) {
+    setSend(mode);
+    writeSendMode(mode);
+  }
+
   function setSilentMin(min: number) {
     setSilent(min);
     writeSilentMin(min);
@@ -76,6 +83,7 @@ export default function ManagerPage() {
         demoSpeed={demoSpeed}
         setDemoSpeed={setDemoSpeed}
         silentMin={silentMin}
+        sendMode={sendMode}
         onBack={() => go("#/")}
         onRemove={() => { removeIds([id]); go("#/"); }}
         onFound={() => addId(id)}
@@ -100,6 +108,8 @@ export default function ManagerPage() {
       setDemoSpeed={setDemoSpeed}
       silentMin={silentMin}
       setSilentMin={setSilentMin}
+      sendMode={sendMode}
+      setSendMode={setSendMode}
       onOpen={(id) => go(`#/trip/${id}`)}
       onNew={() => go("#/new")}
       onAdd={(id) => { addId(id); go(`#/trip/${id}`); }}

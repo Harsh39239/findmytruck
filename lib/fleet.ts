@@ -54,6 +54,18 @@ export function writeSilentMin(min: number) {
   try { localStorage.setItem(SILENT, String(min)); } catch {}
 }
 
+// What "Remind driver" does when messaging is not connected: show it as sent (for demos), or open WhatsApp to send by hand.
+export type SendMode = "demo" | "manual";
+const SEND_MODE = "findmytruck-send-mode";
+
+export function readSendMode(): SendMode {
+  try { return localStorage.getItem(SEND_MODE) === "manual" ? "manual" : "demo"; } catch { return "demo"; }
+}
+
+export function writeSendMode(mode: SendMode) {
+  try { localStorage.setItem(SEND_MODE, mode); } catch {}
+}
+
 // A trip id can arrive from a link or be typed in: take just the 8-character code.
 export function parseTripCode(input: string): string | null {
   const m = input.trim().match(/([a-z0-9]{8})\/?$/i);

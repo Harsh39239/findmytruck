@@ -41,11 +41,12 @@ async function sendOne(sid: string, token: string, via: Channel, from: string, t
   }
 }
 
-// Sends the same text on every configured channel. Returns one result per channel.
-export async function sendToDriver(toPhone: string, text: string): Promise<SendResult[]> {
+// Sends the same text on every configured channel, or only on `only` (for example just WhatsApp for reminders).
+// Returns one result per channel.
+export async function sendToDriver(toPhone: string, text: string, only?: Channel): Promise<SendResult[]> {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
-  const list = senders();
+  const list = senders().filter((x) => !only || x.via === only);
   if (!sid || !token || list.length === 0) return [];
   return Promise.all(list.map((s) => sendOne(sid, token, s.via, s.from, toPhone, text)));
 }

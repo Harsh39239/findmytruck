@@ -4,6 +4,7 @@
 import dynamic from "next/dynamic";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { SendMode } from "@/lib/fleet";
 import { LABELS, LANGUAGES } from "@/lib/labels";
 import { STATUSES, lastDriverEvent, normalizePhone, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
 import type { Event, Trip } from "@/lib/store";
@@ -30,6 +31,7 @@ type Props = {
   demoSpeed: boolean;
   setDemoSpeed: (on: boolean) => void;
   silentMin: number;
+  sendMode?: SendMode; // what Remind driver does when messaging is not connected
   onBack: () => void;
   onRemove: () => void; // drop this truck from the list
   onFound: () => void; // the trip exists, make sure it is on the list
@@ -37,7 +39,7 @@ type Props = {
   onRemind?: (text: string) => void; // the demo page shows the reminder on its phone
 };
 
-export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, silentMin, onBack, onRemove, onFound, embedded = false, onRemind }: Props) {
+export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, silentMin, sendMode = "demo", onBack, onRemove, onFound, embedded = false, onRemind }: Props) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [missing, setMissing] = useState(false);
   const [now, setNow] = useState(0); // set by the first timer tick
@@ -68,32 +70,34 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
     return () => { clearTimeout(first); clearInterval(timer); };
   }, [load, embedded]);
 
-  // "Remind driver": the server messages them in their language. If messaging is not connected, WhatsApp opens with the text ready.
+  // "Remind driver": the server sends it to the driver on WhatsApp. If messaging is not connected, demo mode shows it as
+  // sent (clearly marked as demo), or WhatsApp opens with the text ready, depending on the manager's setting.
   async function remind(eventId?: string) {
     if (remindBusy) return;
     setRemindBusy(true);
     setRemindNote("");
-    const tab = embedded ? null : window.open("", "_blank"); // opened now, while the click still counts
+    const manual = sendMode === "manual" && !embedded;
+    const tab = manual ? window.open("", "_blank") : null; // opened now, while the click still counts
     tab?.document.write("Opening WhatsApp...");
     try {
       const res = await fetch("/api/remind", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripId, eventId, simulate: embedded }),
+        body: JSON.stringify({ tripId, eventId, simulate: embedded, demo: !manual }),
       });
       const data = await res.json();
       if (!res.ok) {
         tab?.close();
         setRemindNote(data.error ?? "Could not send the reminder.");
-      } else if (embedded) {
-        onRemind?.(data.message);
-        setRemindNote("Reminder sent to the driver.");
       } else if (data.sent) {
         tab?.close();
-        setRemindNote("Reminder sent to the driver.");
+        if (embedded) onRemind?.(data.message);
+        setRemindNote(data.simulated ? "Reminder sent on WhatsApp. (Demo mode: nothing was really delivered.)" : "Reminder sent on WhatsApp.");
+      } else if (tab) {
+        tab.location.href = `https://wa.me/?text=${encodeURIComponent(data.message)}`;
+        setRemindNote("WhatsApp opened with the reminder ready to send.");
       } else {
-        if (tab) tab.location.href = `https://wa.me/?text=${encodeURIComponent(data.message)}`;
-        setRemindNote(data.configured ? "The reminder could not be sent, so WhatsApp opened with it ready to send." : "Messaging is not connected, so WhatsApp opened with the reminder ready to send.");
+        setRemindNote(data.hasPhone ? "The reminder could not be sent." : "No phone number is saved for this driver, so nothing could be sent.");
       }
     } catch {
       tab?.close();

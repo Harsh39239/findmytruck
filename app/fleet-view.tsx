@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { STATUSES, lastDriverEvent, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
-import { SILENT_OPTIONS, parseTripCode } from "@/lib/fleet";
+import { SILENT_OPTIONS, parseTripCode, type SendMode } from "@/lib/fleet";
 import type { TripSummary } from "@/lib/store";
 import { Brand, Icon, Skeleton, ago, duration } from "./ui";
 
@@ -12,6 +12,8 @@ type Props = {
   setDemoSpeed: (on: boolean) => void;
   silentMin: number;
   setSilentMin: (min: number) => void;
+  sendMode: SendMode;
+  setSendMode: (mode: SendMode) => void;
   onOpen: (id: string) => void;
   onNew: () => void;
   onAdd: (id: string) => void;
@@ -20,7 +22,7 @@ type Props = {
 
 type Filter = "all" | "need" | "road" | "done";
 
-export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, setSilentMin, onOpen, onNew, onAdd, onMissing }: Props) {
+export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, setSilentMin, sendMode, setSendMode, onOpen, onNew, onAdd, onMissing }: Props) {
   const [trips, setTrips] = useState<TripSummary[] | null>(null);
   const [now, setNow] = useState(0);
   const [code, setCode] = useState("");
@@ -60,24 +62,25 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
     onAdd(id);
   }
 
-  // "Remind driver" for a truck that needs you. The server messages the driver in their language; without
-  // messaging connected, WhatsApp opens with the text ready.
+  // "Remind driver" for a truck that needs you. The server sends it to the driver on WhatsApp. If messaging is not
+  // connected, demo mode shows it as sent (marked as demo), or WhatsApp opens with the text ready.
   async function remind(t: TripSummary) {
     if (reminding) return;
     setReminding(t.id);
     const say = (text: string) => setNotes((cur) => ({ ...cur, [t.id]: text }));
-    const tab = window.open("", "_blank"); // opened now, while the click still counts
+    const manual = sendMode === "manual";
+    const tab = manual ? window.open("", "_blank") : null; // opened now, while the click still counts
     tab?.document.write("Opening WhatsApp...");
     const eventId = [...t.events].reverse().find((e) => e.level !== "ok" && !e.handled)?.id;
     try {
-      const res = await fetch("/api/remind", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tripId: t.id, eventId }) });
+      const res = await fetch("/api/remind", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tripId: t.id, eventId, demo: !manual }) });
       const data = await res.json();
       if (!res.ok) { tab?.close(); say(data.error ?? "Could not send the reminder."); }
-      else if (data.sent) { tab?.close(); say("Reminder sent."); }
-      else {
-        if (tab) tab.location.href = `https://wa.me/?text=${encodeURIComponent(data.message)}`;
+      else if (data.sent) { tab?.close(); say(data.simulated ? "Reminder sent on WhatsApp (demo mode)." : "Reminder sent on WhatsApp."); }
+      else if (tab) {
+        tab.location.href = `https://wa.me/?text=${encodeURIComponent(data.message)}`;
         say("WhatsApp opened with the reminder ready to send.");
-      }
+      } else say(data.hasPhone ? "The reminder could not be sent." : "No phone number saved for this driver.");
     } catch {
       tab?.close();
       say("No connection. Try again.");
@@ -124,6 +127,13 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
             <span className="muted" style={{ flex: 2 }}>Mark a driver silent after</span>
             <select value={silentMin} onChange={(e) => setSilentMin(Number(e.target.value))} aria-label="Silent driver time" style={{ flex: 1.4 }}>
               {SILENT_OPTIONS.map((o) => <option key={o.min} value={o.min}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <span className="muted" style={{ flex: 2 }}>Remind driver, when messaging is not connected</span>
+            <select value={sendMode} onChange={(e) => setSendMode(e.target.value as SendMode)} aria-label="Reminder mode" style={{ flex: 1.4 }}>
+              <option value="demo">Show as sent (demo mode)</option>
+              <option value="manual">Open WhatsApp to send</option>
             </select>
           </div>
           <div className="row" style={{ marginTop: 8 }}>

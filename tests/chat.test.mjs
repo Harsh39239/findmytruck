@@ -79,3 +79,31 @@ test("a reminder from the manager does not count as the driver being active", ()
   assert.equal(silentFor(events, t0 - 1, 0, t0 + 45 * min, 30), 45);
   assert.equal(lastDriverEvent([{ at: 1, status: "Reminder" }]), undefined);
 });
+
+import { sendToDriver } from "../lib/sms.ts";
+
+test("with Twilio connected, a reminder goes out on WhatsApp only, never SMS", async () => {
+  const sent = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { sent.push(Object.fromEntries(init.body)); return { ok: true, status: 201 }; };
+  const saved = { ...process.env };
+  Object.assign(process.env, { TWILIO_ACCOUNT_SID: "ACtest", TWILIO_AUTH_TOKEN: "tok", TWILIO_FROM_WHATSAPP: "whatsapp:+14155238886", TWILIO_FROM_SMS: "+15005550006" });
+  try {
+    const onlyWa = await sendToDriver("+919876543210", "reminder", "WhatsApp");
+    assert.deepEqual(onlyWa, [{ via: "WhatsApp", sent: true }]);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].To, "whatsapp:+919876543210");
+    assert.equal(sent[0].From, "whatsapp:+14155238886");
+    // the first message to a new driver still goes on both channels
+    sent.length = 0;
+    const both = await sendToDriver("+919876543210", "hello");
+    assert.deepEqual(both.map((r) => r.via).sort(), ["SMS", "WhatsApp"]);
+    // without keys nothing is sent at all
+    delete process.env.TWILIO_ACCOUNT_SID;
+    assert.deepEqual(await sendToDriver("+919876543210", "x", "WhatsApp"), []);
+  } finally {
+    globalThis.fetch = realFetch;
+    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+    Object.assign(process.env, saved);
+  }
+});

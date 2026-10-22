@@ -5,8 +5,11 @@ import { getTrip, saveTrip } from "@/lib/store";
 
 const COOLDOWN_MS = 30_000;
 
-// "Remind driver": send the driver a nudge in their language, on every connected channel.
-// Without messaging set up (or for the demo) the text is only returned, so the screen can open WhatsApp with it.
+// "Remind driver": send the driver a nudge in their language on WhatsApp.
+//  - Twilio connected and the driver has a number: a real WhatsApp message is sent.
+//  - Otherwise, in demo mode (the manager chose "show as sent", or the demo page): it is shown as sent but marked
+//    as demo everywhere, because nothing really left the app.
+//  - Otherwise the text is returned so the screen can open WhatsApp for the manager to send by hand.
 export async function POST(req: Request) {
   const b = await req.json().catch(() => null);
   const trip = await getTrip(String(b?.tripId ?? ""));
@@ -27,10 +30,10 @@ export async function POST(req: Request) {
     reason: aboutSlip ? "slip" : "update",
   });
 
-  const simulate = b?.simulate === true; // the demo page: pretend it was delivered
-  const results = !simulate && trip.phone ? await sendToDriver(trip.phone, message) : [];
-  const sent = simulate || results.some((r) => r.sent);
-  const channels = results.filter((r) => r.sent).map((r) => r.via).join(" and ");
+  const configured = messagingConfigured();
+  const simulated = b?.simulate === true || (b?.demo === true && !configured); // never pretends when real sending works
+  const results = !simulated && trip.phone ? await sendToDriver(trip.phone, message, "WhatsApp") : [];
+  const sent = simulated || results.some((r) => r.sent);
 
   trip.events.push({
     id: crypto.randomUUID().slice(0, 8),
@@ -40,9 +43,13 @@ export async function POST(req: Request) {
     translation: "",
     status: "Reminder",
     level: "ok",
-    note: sent ? (simulate ? "Reminder sent to the driver." : `Reminder sent to the driver on ${channels}.`) : "Reminder prepared. It was not sent automatically.",
+    note: simulated
+      ? "Reminder sent on WhatsApp. (Demo mode: nothing was really delivered.)"
+      : sent
+        ? "Reminder sent on WhatsApp."
+        : "Reminder prepared. It was not sent automatically.",
   });
   await saveTrip(trip);
 
-  return NextResponse.json({ message, sent, configured: messagingConfigured(), results });
+  return NextResponse.json({ message, sent, simulated, configured, hasPhone: !!trip.phone, results });
 }
