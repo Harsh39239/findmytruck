@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { STATUSES, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
+import { STATUSES, lastDriverEvent, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
 import { SILENT_OPTIONS, parseTripCode } from "@/lib/fleet";
 import type { TripSummary } from "@/lib/store";
 import { Brand, Icon, Skeleton, ago, duration } from "./ui";
@@ -27,6 +27,8 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
   const [codeError, setCodeError] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [settings, setSettings] = useState(false);
+  const [reminding, setReminding] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
 
   const key = ids.join(",");
   const load = useCallback(async () => {
@@ -58,6 +60,32 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
     onAdd(id);
   }
 
+  // "Remind driver" for a truck that needs you. The server messages the driver in their language; without
+  // messaging connected, WhatsApp opens with the text ready.
+  async function remind(t: TripSummary) {
+    if (reminding) return;
+    setReminding(t.id);
+    const say = (text: string) => setNotes((cur) => ({ ...cur, [t.id]: text }));
+    const tab = window.open("", "_blank"); // opened now, while the click still counts
+    tab?.document.write("Opening WhatsApp...");
+    const eventId = [...t.events].reverse().find((e) => e.level !== "ok" && !e.handled)?.id;
+    try {
+      const res = await fetch("/api/remind", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tripId: t.id, eventId }) });
+      const data = await res.json();
+      if (!res.ok) { tab?.close(); say(data.error ?? "Could not send the reminder."); }
+      else if (data.sent) { tab?.close(); say("Reminder sent."); }
+      else {
+        if (tab) tab.location.href = `https://wa.me/?text=${encodeURIComponent(data.message)}`;
+        say("WhatsApp opened with the reminder ready to send.");
+      }
+    } catch {
+      tab?.close();
+      say("No connection. Try again.");
+    }
+    setReminding(null);
+    load();
+  }
+
   const speed = demoSpeed ? 60 : 1;
   const silentOf = (t: TripSummary) => silentFor(t.events, t.createdAt, stageIndex(t.events), now, silentMin);
   const needs = (t: TripSummary) => openCount(t.events) > 0 || silentOf(t) > 0;
@@ -66,7 +94,7 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
   // Trucks that need you (a decision to make, or a driver gone quiet) come first, delivered ones last.
   const sorted = [...(trips ?? [])].sort((a, b) => {
     const rank = (t: TripSummary) => (needs(t) ? 0 : stageOf(t) >= 3 ? 2 : 1);
-    const lastAt = (t: TripSummary) => t.events[t.events.length - 1]?.at ?? t.createdAt;
+    const lastAt = (t: TripSummary) => lastDriverEvent(t.events)?.at ?? t.createdAt;
     return rank(a) - rank(b) || lastAt(b) - lastAt(a);
   });
   const counts = {
@@ -131,7 +159,7 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
       {shown.map((t) => {
         const open = openCount(t.events);
         const stage = stageOf(t);
-        const last = t.events[t.events.length - 1];
+        const last = lastDriverEvent(t.events);
         const progress = t.route ? routeProgress(t.events, t.route.durationMin, speed, now) : 0;
         const silent = silentOf(t);
         const onRoad = stage === 2;
@@ -142,7 +170,8 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
           : stage === 1 ? "Loaded" : "At pickup";
         const chip = stage >= 3 ? "done" : onRoad ? "onroad" : stage < 0 ? "idle" : "start";
         return (
-          <button key={t.id} className={`fleetcard ${silent > 0 ? "silent" : open > 0 ? "attn" : ""}`} onClick={() => onOpen(t.id)}>
+          <div key={t.id} className={`fleetitem ${needs(t) ? "has-actions" : ""} ${silent > 0 ? "is-silent" : ""}`}>
+          <button className={`fleetcard ${silent > 0 ? "silent" : open > 0 ? "attn" : ""}`} onClick={() => onOpen(t.id)}>
             <div className="fc-top">
               <span className={`avatar ${chip}`}>{(t.driver || t.truck).trim().charAt(0).toUpperCase()}</span>
               <div className="fc-title">
@@ -170,6 +199,13 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
               </span>
             </div>
           </button>
+          {needs(t) && (
+            <div className="fc-actions">
+              <span className="muted">{notes[t.id] ?? (silent > 0 ? "This driver has gone quiet." : `${open} ${open === 1 ? "item is" : "items are"} waiting for you.`)}</span>
+              <button type="button" className="wa" disabled={reminding === t.id} onClick={() => remind(t)}>Remind driver</button>
+            </div>
+          )}
+          </div>
         );
       })}
 

@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LABELS, LANGUAGES } from "@/lib/labels";
-import { STATUSES, normalizePhone, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
+import { STATUSES, lastDriverEvent, normalizePhone, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
 import type { Event, Trip } from "@/lib/store";
 import type { Created } from "./new-trip-form";
 import { Brand, Icon, Skeleton, ago, duration } from "./ui";
@@ -34,9 +34,10 @@ type Props = {
   onRemove: () => void; // drop this truck from the list
   onFound: () => void; // the trip exists, make sure it is on the list
   embedded?: boolean; // shown inside the demo page: no header, buttons, driver link or chat panel
+  onRemind?: (text: string) => void; // the demo page shows the reminder on its phone
 };
 
-export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, silentMin, onBack, onRemove, onFound, embedded = false }: Props) {
+export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, silentMin, onBack, onRemove, onFound, embedded = false, onRemind }: Props) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [missing, setMissing] = useState(false);
   const [now, setNow] = useState(0); // set by the first timer tick
@@ -44,6 +45,8 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const [sim, setSim] = useState<{ from: "driver" | "bot"; text: string }[]>([]);
   const [simText, setSimText] = useState("");
   const [simBusy, setSimBusy] = useState(false);
+  const [remindBusy, setRemindBusy] = useState(false);
+  const [remindNote, setRemindNote] = useState("");
 
   const foundRef = useRef(onFound);
   useEffect(() => { foundRef.current = onFound; });
@@ -64,6 +67,41 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
     const timer = setInterval(tick, embedded ? 1500 : 3000);
     return () => { clearTimeout(first); clearInterval(timer); };
   }, [load, embedded]);
+
+  // "Remind driver": the server messages them in their language. If messaging is not connected, WhatsApp opens with the text ready.
+  async function remind(eventId?: string) {
+    if (remindBusy) return;
+    setRemindBusy(true);
+    setRemindNote("");
+    const tab = embedded ? null : window.open("", "_blank"); // opened now, while the click still counts
+    tab?.document.write("Opening WhatsApp...");
+    try {
+      const res = await fetch("/api/remind", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId, eventId, simulate: embedded }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        tab?.close();
+        setRemindNote(data.error ?? "Could not send the reminder.");
+      } else if (embedded) {
+        onRemind?.(data.message);
+        setRemindNote("Reminder sent to the driver.");
+      } else if (data.sent) {
+        tab?.close();
+        setRemindNote("Reminder sent to the driver.");
+      } else {
+        if (tab) tab.location.href = `https://wa.me/?text=${encodeURIComponent(data.message)}`;
+        setRemindNote(data.configured ? "The reminder could not be sent, so WhatsApp opened with it ready to send." : "Messaging is not connected, so WhatsApp opened with the reminder ready to send.");
+      }
+    } catch {
+      tab?.close();
+      setRemindNote("No connection. Try again.");
+    }
+    setRemindBusy(false);
+    load();
+  }
 
   // Demo panel: send a message as if it came from the driver's phone, and show what the app answers.
   async function sendSim(text: string) {
@@ -122,7 +160,7 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const phone = created?.trip.id === trip.id ? created.phone : "";
 
   const events = [...trip.events].reverse();
-  const last = trip.events[trip.events.length - 1];
+  const last = lastDriverEvent(trip.events);
   const link = `${window.location.origin}/driver/${trip.id}`;
   const open = openCount(trip.events);
   const stage = stageIndex(trip.events);
@@ -130,7 +168,6 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const route = trip.route;
   const progress = route ? routeProgress(trip.events, route.durationMin, speed, now) : 0;
   const message = LABELS[trip.language].invite.replace("{url}", link);
-  const nudge = LABELS[trip.language].nudge.replace("{url}", link);
   const digits = (normalizePhone(phone) ?? "").replace("+", "");
   const silent = silentFor(trip.events, trip.createdAt, stage, now, silentMin);
 
@@ -169,11 +206,11 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
         <div className="banner danger">
           <strong>No news from the driver for {duration(silent)}.</strong>
           <div style={{ margin: "4px 0 10px" }}>Call them, or send a reminder in {LANGUAGE_NAMES[trip.language]}.</div>
-          <a href={`https://wa.me/${digits}?text=${encodeURIComponent(nudge)}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-            <button className="wa wide" type="button">Send reminder on WhatsApp</button>
-          </a>
+          <button className="wa wide" type="button" disabled={remindBusy} onClick={() => remind()}>Remind driver</button>
         </div>
       )}
+
+      {remindNote && <div className="banner">{remindNote}</div>}
 
       {invite?.sent && (
         <div className="banner good">
@@ -282,7 +319,10 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
           </div>
           {ev.photo && <img src={ev.photo} alt="Slip" />}
           {ev.level !== "ok" && !ev.handled && (
-            <p style={{ marginBottom: 0 }}><button className="secondary" onClick={() => markHandled(ev.id)}>Mark as handled</button></p>
+            <div className="row" style={{ marginTop: 12 }}>
+              <button className="wa" disabled={remindBusy} onClick={() => remind(ev.id)}>Remind driver</button>
+              <button className="secondary" onClick={() => markHandled(ev.id)}>Mark as handled</button>
+            </div>
           )}
         </div>
       ))}

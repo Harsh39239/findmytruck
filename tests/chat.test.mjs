@@ -55,3 +55,27 @@ test("a Twilio signature must match: wrong token, wrong URL or changed text are 
   // field order must not matter
   assert.equal(validTwilioSignature("secret-token", url, { NumMedia: "0", Body: "2", From: "whatsapp:+919876543210" }, sig), true);
 });
+
+import { reminderMessage } from "../lib/chat.ts";
+import { lastDriverEvent, silentFor } from "../lib/rules.ts";
+
+test("reminders ask for the right thing, in the driver's language", () => {
+  // driver never chose a language: the menu is sent again
+  assert.equal(reminderMessage({ lang: "en", truck: "T1", stage: "awaiting_language" }), languageMenu("T1"));
+  // slip trouble: ask for a clear photo
+  assert.ok(reminderMessage({ lang: "ta", truck: "T1", stage: "active", reason: "slip" }).includes("எடைச் சீட்டின்"));
+  assert.ok(reminderMessage({ lang: "en", truck: "T1", stage: "active", reason: "slip" }).includes("clear photo"));
+  // otherwise: ask for an update and show the reply numbers
+  const update = reminderMessage({ lang: "hi", truck: "T1", stage: "active" });
+  assert.ok(update.includes("कृपया अपनी ट्रिप का हाल बताएं") && update.includes("1 पहुँच गया"));
+});
+
+test("a reminder from the manager does not count as the driver being active", () => {
+  const min = 60000;
+  const t0 = 50_000_000;
+  const events = [{ at: t0, status: "Reached" }, { at: t0 + 40 * min, status: "Reminder" }];
+  assert.equal(lastDriverEvent(events).status, "Reached");
+  // 45 minutes after the driver's last message, a reminder at minute 40 must not reset the clock
+  assert.equal(silentFor(events, t0 - 1, 0, t0 + 45 * min, 30), 45);
+  assert.equal(lastDriverEvent([{ at: 1, status: "Reminder" }]), undefined);
+});

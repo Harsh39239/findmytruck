@@ -15,14 +15,15 @@ const TRUCK = "MH12 AB 1234";
 const noop = () => {};
 
 type Message = { from: "driver" | "bot"; text?: string; photo?: string };
-type Step = { say?: string; photo?: "good" | "blurry"; note: string; after: number };
+type Step = { say?: string; photo?: "good" | "blurry"; remind?: boolean; note: string; after: number };
 
 const SCRIPT: Step[] = [
   { say: "2", note: "The driver picks Tamil from the first message", after: 3500 },
   { say: "1", note: "Reports that the truck reached the pickup", after: 3500 },
   { photo: "good", note: "Sends a photo of the weighment slip: AI reads it, rules check it", after: 5000 },
   { say: "3", note: "Leaves the yard: the lorry starts moving on the map", after: 11000 },
-  { say: "வழியில் டயர் பஞ்சர் ஆகிவிட்டது", note: "Reports a problem in Tamil: AI translates it, it lands in Review", after: 7000 },
+  { say: "வழியில் டயர் பஞ்சர் ஆகிவிட்டது", note: "Reports a problem in Tamil: AI translates it, it lands in Review", after: 6000 },
+  { remind: true, note: "The manager taps Remind driver: the driver is nudged in Tamil", after: 6000 },
   { say: "4", note: "Delivers the load", after: 0 },
 ];
 
@@ -139,6 +140,15 @@ export default function DemoClient() {
     setBusy(false);
   }
 
+  // What "Remind driver" does on the manager screen: the nudge shows up on the driver phone.
+  async function remindDriver(id: string) {
+    try {
+      const res = await fetch("/api/remind", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tripId: id, simulate: true }) });
+      const data = await res.json();
+      if (res.ok) setMessages((cur) => [...cur, { from: "bot", text: data.message }]);
+    } catch {}
+  }
+
   async function play() {
     if (playing) return;
     setPlaying(true);
@@ -149,7 +159,8 @@ export default function DemoClient() {
       for (let i = 0; i < SCRIPT.length && !stop.current; i++) {
         const s = SCRIPT[i];
         setNote(`Step ${i + 1} of ${SCRIPT.length}: ${s.note}`);
-        await sendAsDriver(id, s.photo ? { photo: slipPhoto(18450) } : { text: s.say });
+        if (s.remind) await remindDriver(id);
+        else await sendAsDriver(id, s.photo ? { photo: slipPhoto(18450) } : { text: s.say });
         if (s.after) await sleep(s.after);
       }
       if (!stop.current) setNote("Done. Every reply updated the manager's screen by itself.");
@@ -209,7 +220,7 @@ export default function DemoClient() {
         <section>
           <h2>The manager&apos;s screen (updates by itself)</h2>
           {tripId
-            ? <TripDetail key={tripId} tripId={tripId} created={null} demoSpeed setDemoSpeed={noop} silentMin={120} onBack={noop} onRemove={noop} onFound={noop} embedded />
+            ? <TripDetail key={tripId} tripId={tripId} created={null} demoSpeed setDemoSpeed={noop} silentMin={120} onBack={noop} onRemove={noop} onFound={noop} embedded onRemind={(text) => setMessages((cur) => [...cur, { from: "bot", text }])} />
             : <p className="muted">Starting the demo...</p>}
         </section>
       </div>

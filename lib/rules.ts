@@ -25,12 +25,19 @@ export function stageIndex(events: Stamped[]) {
 // Review and flag items the manager has not dealt with yet.
 export const openCount = (events: Stamped[]) => events.filter((e) => e.level !== "ok" && !e.handled).length;
 
+// The newest thing the DRIVER did. A reminder the manager sent is not the driver being active.
+export function lastDriverEvent<T extends { status?: string }>(events: T[]): T | undefined {
+  for (let i = events.length - 1; i >= 0; i--) if (events[i].status !== "Reminder") return events[i];
+  return undefined;
+}
+
 // Minutes of silence from the driver, or 0 when all is well. A trip counts as silent when it is not
 // delivered yet and nothing has come in for `thresholdMin` minutes. A trip nobody has opened is measured
 // from the moment it was created.
-export function silentFor(events: { at: number }[], createdAt: number, stage: number, now: number, thresholdMin: number) {
+export function silentFor(events: { at: number; status?: string }[], createdAt: number, stage: number, now: number, thresholdMin: number) {
   if (stage >= 3) return 0;
-  const lastAt = events.length ? events[events.length - 1].at : createdAt;
+  const heard = lastDriverEvent(events);
+  const lastAt = heard ? heard.at : createdAt;
   const mins = Math.floor(Math.max(0, now - lastAt) / 60000);
   return mins >= thresholdMin ? mins : 0;
 }

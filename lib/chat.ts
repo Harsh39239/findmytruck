@@ -115,3 +115,28 @@ export const ackStatus = (lang: Lang, status: ChatStatus) => `${WORDS[lang].note
 export const ackPhoto = (lang: Lang) => WORDS[lang].photoOk;
 export const ackText = (lang: Lang) => WORDS[lang].textOk;
 export const askRetake = (lang: Lang) => WORDS[lang].retake;
+
+// ---------- Reminders from the manager ----------
+const ASK_SLIP: Record<Lang, string> = {
+  hi: "कृपया स्लिप की साफ़ फोटो भेजें।",
+  ta: "தயவுசெய்து எடைச் சீட்டின் தெளிவான படத்தை அனுப்பவும்.",
+  ml: "ദയവായി സ്ലിപ്പിന്റെ വ്യക്തമായ ഫോട്ടോ അയയ്ക്കുക.",
+  en: "Please send a clear photo of the weighment slip.",
+};
+
+const REMIND_UPDATE: Record<Lang, string> = {
+  hi: "कृपया अपनी ट्रिप का हाल बताएं।",
+  ta: "தயவுசெய்து உங்கள் பயண நிலையைத் தெரிவிக்கவும்.",
+  ml: "ദയവായി നിങ്ങളുടെ യാത്രയുടെ വിവരം അറിയിക്കുക.",
+  en: "Please update your trip status.",
+};
+
+// The text sent to a driver when the manager taps "Remind driver".
+//  - the driver never picked a language: show the language menu again
+//  - the problem is the slip: ask for a clear photo
+//  - otherwise: ask for an update and show the reply numbers
+export function reminderMessage(opts: { lang: Lang; truck: string; stage: "awaiting_language" | "active"; reason?: "slip" | "update" }): string {
+  if (opts.stage === "awaiting_language") return languageMenu(opts.truck);
+  if (opts.reason === "slip") return `FindMyTruck | ${opts.truck}\n${ASK_SLIP[opts.lang]}`;
+  return `${REMIND_UPDATE[opts.lang]}\n${activeMenu(opts.lang, opts.truck)}`;
+}

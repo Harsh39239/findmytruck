@@ -370,3 +370,12 @@ button.fleetcard.attn { border-color: var(--review); }
 @keyframes fresh { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow); transform: translateY(-6px); opacity: 0.4; } 30% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent), var(--shadow); transform: none; opacity: 1; } 100% { box-shadow: var(--shadow); } }
 @media (prefers-reduced-motion: reduce) { .event.fresh { animation: none; } }
 .embed .timeline { padding-left: 24px; }
+
+/* ---------- reminders ---------- */
+.fleetitem { margin-bottom: 10px; }
+.fleetitem button.fleetcard { margin-bottom: 0; }
+.fleetitem.has-actions button.fleetcard { border-bottom-left-radius: 0; border-bottom-right-radius: 0; box-shadow: none; }
+.fc-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; background: var(--card); border: 1px solid var(--line); border-top: 1px dashed var(--line); border-radius: 0 0 16px 16px; box-shadow: var(--shadow); }
+.fleetitem.is-silent .fc-actions { border-color: var(--flag); border-top-color: var(--line); }
+.fc-actions > span { font-size: 0.85rem; }
+.fc-actions button { flex: none; padding: 8px 14px; font-size: 0.85rem; }
