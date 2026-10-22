@@ -234,6 +234,12 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
         </div>
       )}
 
+      {silent <= 0 && stage < 3 && (
+        <button className="wa wide" type="button" style={{ marginBottom: 12 }} disabled={remindBusy} onClick={() => remind()}>
+          Remind driver on WhatsApp
+        </button>
+      )}
+
       {remindNote && <div className="banner">{remindNote}</div>}
 
       {invite?.sent && (
