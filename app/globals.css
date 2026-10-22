@@ -398,3 +398,6 @@ button.fleetcard.attn { border-color: var(--review); }
 .mapstats .ms-bar { height: 6px; border-radius: 99px; background: #dfe5ee; overflow: hidden; }
 .mapstats .ms-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3b7bff, #1f5eff); transition: width 0.3s linear; }
 .mapstats span { font-size: 0.76rem; color: #475467; }
+
+/* ---------- remove confirmation ---------- */
+button.danger { background: var(--flag); color: #fff; }

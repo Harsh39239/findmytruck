@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   readAutoMin, readDemoSpeed, readIds, readSendMode, readSilentMin,
   writeAutoMin, writeDemoSpeed, writeIds, writeSendMode, writeSilentMin, type SendMode,
@@ -31,6 +31,7 @@ export default function ManagerPage() {
   const [autoMin, setAuto] = useState(60);
   const [sendMode, setSend] = useState<SendMode>("demo");
   const [created, setCreated] = useState<Created | null>(null);
+  const removed = useRef(new Set<string>()); // trucks the manager removed in this visit: a page still loading must not re-add them
 
   useEffect(() => {
     const start = setTimeout(() => {
@@ -79,7 +80,11 @@ export default function ManagerPage() {
 
   const go = (hash: string) => { window.location.hash = hash; };
 
-  const addId = useCallback((id: string) => {
+  // `chosen` is true when the manager adds the truck on purpose (new trip, or by code). Otherwise it is the app
+  // noticing a truck it has just loaded, which must not bring back one that was just removed.
+  const addId = useCallback((id: string, chosen = false) => {
+    if (chosen) removed.current.delete(id);
+    else if (removed.current.has(id)) return;
     setIds((cur) => {
       if (cur.includes(id)) return cur;
       const next = [...cur, id];
@@ -89,6 +94,7 @@ export default function ManagerPage() {
   }, []);
 
   const removeIds = useCallback((drop: string[]) => {
+    drop.forEach((id) => removed.current.add(id));
     setIds((cur) => {
       const next = cur.filter((id) => !drop.includes(id));
       writeIds(next);
@@ -157,7 +163,7 @@ export default function ManagerPage() {
     return (
       <NewTripForm
         onCancel={ids.length > 0 ? () => go("#/") : undefined}
-        onCreated={(c) => { setCreated(c); addId(c.trip.id); go(`#/trip/${c.trip.id}`); }}
+        onCreated={(c) => { setCreated(c); addId(c.trip.id, true); go(`#/trip/${c.trip.id}`); }}
       />
     );
   }
@@ -171,7 +177,7 @@ export default function ManagerPage() {
       onSettings={() => go("#/settings")}
       onOpen={(id) => go(`#/trip/${id}`)}
       onNew={() => go("#/new")}
-      onAdd={(id) => { addId(id); go(`#/trip/${id}`); }}
+      onAdd={(id) => { addId(id, true); go(`#/trip/${id}`); }}
       onMissing={removeIds}
     />
   );

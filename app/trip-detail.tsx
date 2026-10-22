@@ -44,6 +44,8 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const [missing, setMissing] = useState(false);
   const [now, setNow] = useState(0); // set by the first timer tick
   const [copied, setCopied] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false); // first tap on Remove asks "tap again"
+  const removing = useRef(false); // once removal starts, this page must not put the truck back on the list
   const [remindBusy, setRemindBusy] = useState(false);
   const [remindNote, setRemindNote] = useState("");
 
@@ -53,7 +55,7 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/trip?id=${tripId}`);
-      if (res.ok) { setTrip(await res.json()); foundRef.current(); }
+      if (res.ok) { setTrip(await res.json()); if (!removing.current) foundRef.current(); }
       else if (res.status === 404) setMissing(true);
     } catch {
       // No connection right now: keep showing what we have and try again on the next tick.
@@ -126,7 +128,7 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
           <p className="muted">There is no trip with the code {tripId}. It may have expired or the code is wrong.</p>
           <div className="row">
             <button className="secondary" onClick={onBack}>← All trucks</button>
-            <button className="secondary" onClick={onRemove}>Remove from my list</button>
+            <button className="secondary" onClick={() => { removing.current = true; onRemove(); }}>Remove from my list</button>
           </div>
         </div>
       </main>
@@ -189,7 +191,18 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
       {!embedded && (
         <div className="row" style={{ marginBottom: 12 }}>
           <button className="secondary" onClick={onBack}>← All trucks</button>
-          <button className="secondary" onClick={() => { if (confirm("Remove this truck from your list? The trip itself is not deleted.")) onRemove(); }}>Remove</button>
+          <button
+            className={confirmRemove ? "danger" : "secondary"}
+            onClick={() => {
+              if (!confirmRemove) {
+                setConfirmRemove(true);
+                setTimeout(() => setConfirmRemove(false), 4000); // changed your mind? it goes back by itself
+                return;
+              }
+              removing.current = true;
+              onRemove();
+            }}
+          >{confirmRemove ? "Tap again to remove" : "Remove"}</button>
         </div>
       )}
 
