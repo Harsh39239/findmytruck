@@ -8,7 +8,7 @@ import { LABELS, LANGUAGES } from "@/lib/labels";
 import { STATUSES, normalizePhone, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
 import type { Event, Trip } from "@/lib/store";
 import type { Created } from "./new-trip-form";
-import { Brand, ago, duration } from "./ui";
+import { Brand, Icon, Skeleton, ago, duration } from "./ui";
 
 const RouteMap = dynamic(() => import("./route-map"), { ssr: false, loading: () => <div className="map" /> });
 
@@ -114,7 +114,7 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
       </main>
     );
   }
-  if (!trip) return <main><Brand /><p className="muted">Loading...</p></main>;
+  if (!trip) return <main><Brand /><Skeleton rows={2} /></main>;
 
   const invite = !embedded && created?.trip.id === trip.id ? created.invite : null;
   const routeNote = !embedded && created?.trip.id === trip.id ? created.routeNote : "";
@@ -261,10 +261,11 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
 
       <h2>Timeline</h2>
       {events.length === 0 && <p className="muted">Waiting for the driver.</p>}
+      <div className="timeline">
       {events.map((ev: Event) => (
-        <div key={ev.id} className={`card event ${ev.handled ? "handled" : ev.level}`}>
+        <div key={ev.id} className={`card event ${ev.handled ? "handled" : ev.level} ${now > 0 && now - ev.at < 6000 ? "fresh" : ""}`}>
           <div className="row" style={{ justifyContent: "space-between" }}>
-            <span className="title">{ev.status}</span>
+            <span className="title"><span className="kindicon"><Icon name={ev.kind === "slip" ? "camera" : ev.kind === "text" ? "chat" : ev.kind === "system" ? "globe" : "check"} size={16} /></span>{ev.status}</span>
             {ev.handled
               ? <span className="badge handled" style={{ flex: "none" }}>HANDLED</span>
               : <span className={`badge ${ev.level}`} style={{ flex: "none" }}>{levelText[ev.level]}</span>}
@@ -285,6 +286,7 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
           )}
         </div>
       ))}
+      </div>
     </Shell>
   );
 }

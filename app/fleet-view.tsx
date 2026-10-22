@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { STATUSES, openCount, routeProgress, silentFor, stageIndex } from "@/lib/rules";
 import { SILENT_OPTIONS, parseTripCode } from "@/lib/fleet";
 import type { TripSummary } from "@/lib/store";
-import { Brand, ago, duration } from "./ui";
+import { Brand, Icon, Skeleton, ago, duration } from "./ui";
 
 type Props = {
   ids: string[];
@@ -18,19 +18,15 @@ type Props = {
   onMissing: (ids: string[]) => void;
 };
 
-function LorryMini() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M1 6h13v10H1zM14 9h4l4 4v3h-8z" /><circle cx="6" cy="18" r="2" /><circle cx="18" cy="18" r="2" />
-    </svg>
-  );
-}
+type Filter = "all" | "need" | "road" | "done";
 
 export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, setSilentMin, onOpen, onNew, onAdd, onMissing }: Props) {
   const [trips, setTrips] = useState<TripSummary[] | null>(null);
   const [now, setNow] = useState(0);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [settings, setSettings] = useState(false);
 
   const key = ids.join(",");
   const load = useCallback(async () => {
@@ -64,72 +60,112 @@ export default function FleetView({ ids, demoSpeed, setDemoSpeed, silentMin, set
 
   const speed = demoSpeed ? 60 : 1;
   const silentOf = (t: TripSummary) => silentFor(t.events, t.createdAt, stageIndex(t.events), now, silentMin);
+  const needs = (t: TripSummary) => openCount(t.events) > 0 || silentOf(t) > 0;
+  const stageOf = (t: TripSummary) => stageIndex(t.events);
+
   // Trucks that need you (a decision to make, or a driver gone quiet) come first, delivered ones last.
   const sorted = [...(trips ?? [])].sort((a, b) => {
-    const rank = (t: TripSummary) => (openCount(t.events) > 0 || silentOf(t) > 0 ? 0 : stageIndex(t.events) >= 3 ? 2 : 1);
+    const rank = (t: TripSummary) => (needs(t) ? 0 : stageOf(t) >= 3 ? 2 : 1);
     const lastAt = (t: TripSummary) => t.events[t.events.length - 1]?.at ?? t.createdAt;
     return rank(a) - rank(b) || lastAt(b) - lastAt(a);
   });
-  const needDecision = sorted.filter((t) => openCount(t.events) > 0).length;
-  const silentCount = sorted.filter((t) => silentOf(t) > 0).length;
+  const counts = {
+    all: sorted.length,
+    need: sorted.filter(needs).length,
+    road: sorted.filter((t) => stageOf(t) >= 2 && stageOf(t) < 3).length,
+    done: sorted.filter((t) => stageOf(t) >= 3).length,
+  };
+  const shown = sorted.filter((t) =>
+    filter === "all" ? true : filter === "need" ? needs(t) : filter === "road" ? stageOf(t) >= 2 && stageOf(t) < 3 : stageOf(t) >= 3,
+  );
+  const tabs: [Filter, string][] = [["all", "All"], ["need", "Need you"], ["road", "On the road"], ["done", "Done"]];
 
   return (
     <main>
-      <Brand />
+      <Brand
+        right={
+          <button className="iconbtn" type="button" onClick={() => setSettings((s) => !s)} aria-label="Settings" aria-expanded={settings}>
+            <Icon name="clock" size={18} />
+          </button>
+        }
+      />
 
-      <div className="row" style={{ marginBottom: 12 }}>
-        <button className="wide" onClick={onNew}>+ New trip</button>
-        <select value={demoSpeed ? "demo" : "real"} onChange={(e) => setDemoSpeed(e.target.value === "demo")} aria-label="Lorry speed">
-          <option value="demo">Demo speed (60x)</option>
-          <option value="real">Real time</option>
-        </select>
-      </div>
+      {settings && (
+        <div className="card settings">
+          <div className="row">
+            <span className="muted" style={{ flex: 2 }}>Mark a driver silent after</span>
+            <select value={silentMin} onChange={(e) => setSilentMin(Number(e.target.value))} aria-label="Silent driver time" style={{ flex: 1.4 }}>
+              {SILENT_OPTIONS.map((o) => <option key={o.min} value={o.min}>{o.label}</option>)}
+            </select>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <span className="muted" style={{ flex: 2 }}>Lorry speed on maps</span>
+            <select value={demoSpeed ? "demo" : "real"} onChange={(e) => setDemoSpeed(e.target.value === "demo")} aria-label="Lorry speed" style={{ flex: 1.4 }}>
+              <option value="demo">Demo (60x)</option>
+              <option value="real">Real time</option>
+            </select>
+          </div>
+        </div>
+      )}
+
+      <button className="wide newtrip" onClick={onNew}>+ New trip</button>
 
       <div className="stats">
-        <div className="stat"><b>{trips ? sorted.length : "…"}</b><span>Trucks</span></div>
-        <div className={`stat ${needDecision > 0 ? "alert" : ""}`}><b>{trips ? needDecision : "…"}</b><span>Need you</span></div>
-        <div className={`stat ${silentCount > 0 ? "alert" : ""}`}><b>{trips ? silentCount : "…"}</b><span>Silent</span></div>
-      </div>
-      <div className="row" style={{ marginBottom: 12, alignItems: "center" }}>
-        <span className="muted" style={{ flex: 2 }}>Mark a driver silent after</span>
-        <select value={silentMin} onChange={(e) => setSilentMin(Number(e.target.value))} aria-label="Silent driver time" style={{ flex: 1 }}>
-          {SILENT_OPTIONS.map((o) => <option key={o.min} value={o.min}>{o.label}</option>)}
-        </select>
+        <div className="stat"><b>{trips ? counts.all : "…"}</b><span>Trucks</span></div>
+        <div className={`stat ${counts.need > 0 ? "alert" : ""}`}><b>{trips ? counts.need : "…"}</b><span>Need you</span></div>
+        <div className="stat good"><b>{trips ? counts.road : "…"}</b><span>On the road</span></div>
       </div>
 
+      <div className="tabs" role="tablist" aria-label="Filter trucks">
+        {tabs.map(([f, label]) => (
+          <button key={f} role="tab" aria-selected={filter === f} className={filter === f ? "on" : ""} onClick={() => setFilter(f)}>
+            {label} <span>{counts[f]}</span>
+          </button>
+        ))}
+      </div>
+
+      {!trips && <Skeleton rows={3} />}
       {trips && sorted.length === 0 && <p className="muted">None of your trucks could be loaded yet. They may have expired.</p>}
+      {trips && sorted.length > 0 && shown.length === 0 && <div className="empty"><Icon name="check" size={28} /><b>Nothing here</b><span>No trucks match this filter.</span></div>}
 
-      {sorted.map((t) => {
+      {shown.map((t) => {
         const open = openCount(t.events);
-        const stage = stageIndex(t.events);
+        const stage = stageOf(t);
         const last = t.events[t.events.length - 1];
         const progress = t.route ? routeProgress(t.events, t.route.durationMin, speed, now) : 0;
         const silent = silentOf(t);
+        const onRoad = stage === 2;
         const status =
           stage < 0 ? "Not started"
           : stage >= 3 ? "Delivered"
-          : stage === 2 ? `On the road${t.route ? `, ${Math.round(progress * 100)}%` : ""}`
-          : stage === 1 ? "Loaded" : "Reached pickup";
+          : onRoad ? `On the road${t.route ? `, ${Math.round(progress * 100)}%` : ""}`
+          : stage === 1 ? "Loaded" : "At pickup";
+        const chip = stage >= 3 ? "done" : onRoad ? "onroad" : stage < 0 ? "idle" : "start";
         return (
-          <button key={t.id} className={`fleetcard ${silent > 0 ? "silent" : ""}`} onClick={() => onOpen(t.id)}>
-            <div className="row" style={{ justifyContent: "space-between" }}>
-              <strong>{t.truck}</strong>
-              <span className="row" style={{ flex: "none", gap: 6 }}>
-                {silent > 0 && <span className="badge flag pulse" style={{ flex: "none" }}>SILENT</span>}
-                {open > 0 && <span className="badge flag" style={{ flex: "none" }}>{open} NEED{open === 1 ? "S" : ""} YOU</span>}
-                {open === 0 && stage >= 3 && <span className="badge ok" style={{ flex: "none" }}>DONE</span>}
+          <button key={t.id} className={`fleetcard ${silent > 0 ? "silent" : open > 0 ? "attn" : ""}`} onClick={() => onOpen(t.id)}>
+            <div className="fc-top">
+              <span className={`avatar ${chip}`}>{(t.driver || t.truck).trim().charAt(0).toUpperCase()}</span>
+              <div className="fc-title">
+                <strong>{t.truck}</strong>
+                <span className="muted">{t.driver} · {t.material}</span>
+              </div>
+              <span className="fc-badges">
+                {silent > 0 && <span className="badge flag pulse">SILENT</span>}
+                {open > 0 && <span className="badge flag">{open} NEED{open === 1 ? "S" : ""} YOU</span>}
               </span>
             </div>
-            <div className="muted">{t.driver} · {t.material}{t.route ? ` · ${t.route.from} → ${t.route.to}` : ""}</div>
+            {t.route && (
+              <div className="fc-route"><Icon name="pin" size={14} /> {t.route.from} → {t.route.to} <span className="muted">· {t.route.distanceKm} km · {duration(t.route.durationMin)}</span></div>
+            )}
             <div className="steps mini">
               {STATUSES.map((s, i) => <div key={s} className={`step ${i <= stage ? "done" : ""}`}><i /></div>)}
             </div>
-            {t.route && stage >= 2 && stage < 3 && (
-              <div className="roadbar"><div className="roadfill" style={{ width: `${Math.round(progress * 100)}%` }} /><span className="roadlorry" style={{ left: `${Math.round(progress * 100)}%` }}><LorryMini /></span></div>
+            {t.route && onRoad && (
+              <div className="roadbar"><div className="roadfill" style={{ width: `${Math.round(progress * 100)}%` }} /><span className="roadlorry" style={{ left: `${Math.round(progress * 100)}%` }}><Icon name="truck" size={18} /></span></div>
             )}
-            <div className="row" style={{ justifyContent: "space-between", marginTop: 6 }}>
-              <span className="muted"><b>{status}</b></span>
-              <span className={silent > 0 ? "silenttext" : "muted"} style={{ textAlign: "right" }}>
+            <div className="fc-foot">
+              <span className={`chip ${chip}`}>{status}</span>
+              <span className={silent > 0 ? "silenttext" : "muted"}>
                 {silent > 0 ? `No news for ${duration(silent)}` : last ? ago(last.at, now) : "no update yet"}
               </span>
             </div>
