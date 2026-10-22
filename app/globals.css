@@ -401,3 +401,20 @@ button.fleetcard.attn { border-color: var(--review); }
 
 /* ---------- remove confirmation ---------- */
 button.danger { background: var(--flag); color: #fff; }
+
+/* ---------- demo v2: view switcher, driver's-side view, camera moment ---------- */
+.seg { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; flex-wrap: wrap; }
+.seg button { padding: 8px 14px; font-size: 0.88rem; border-radius: 9px; background: transparent; color: var(--muted); }
+.seg button.on { background: var(--accent); color: #fff; }
+.wa { position: relative; }
+.wa-camera { position: absolute; left: 0; right: 0; top: 58px; bottom: 112px; z-index: 5; background: #0b1220; display: grid; place-items: center; align-content: center; gap: 12px; padding: 16px; animation: shutter 1.8s ease-out both; }
+.wa-camera img { width: 100%; max-height: 70%; object-fit: contain; border-radius: 10px; border: 3px solid #fff; }
+.wa-camera span { color: #fff; font-weight: 700; font-size: 0.95rem; }
+@keyframes shutter { 0% { opacity: 0; } 8% { opacity: 1; } 78% { opacity: 1; filter: none; } 84% { filter: brightness(2.6); } 100% { opacity: 1; filter: none; } }
+@media (prefers-reduced-motion: reduce) { .wa-camera { animation: none; } }
+.demogrid.view-driver { grid-template-columns: minmax(0, 460px); justify-content: center; }
+.demogrid.view-driver .wa { max-width: 460px; }
+.demogrid.view-driver .wa-log { height: 520px; font-size: 1.02rem; }
+.demogrid.view-driver .wa-msg { font-size: 1rem; }
+.demogrid.view-manager { grid-template-columns: minmax(0, 640px); justify-content: center; }
+.demonote.big { font-size: 1.1rem; text-align: center; }
