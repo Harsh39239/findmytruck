@@ -485,3 +485,9 @@ button:not(.secondary):not(.fleetcard):not(.wa), .cta, .seg button.on { color: #
 button.wa { color: #fff; background: #12803f; }
 .seg button:not(.on) { color: var(--text); }
 .navbrand, .navbrand span { color: var(--text); }
+
+/* stat tiles: dark tile with white numbers, readable in light and dark mode */
+.stat { background: linear-gradient(135deg, #1b2440, #2a2f6b); border-color: transparent; }
+.stat b, .stat.good b { color: #fff; }
+.stat.alert b { color: #ffb4b4; }
+.stat span { color: #c3cbe0; }

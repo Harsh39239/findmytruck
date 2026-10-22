@@ -1,7 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- fixed screenshots with known sizes, nothing to optimise */
 import HashRedirect from "./hash-redirect";
 
-const GITHUB = "https://github.com/Harsh39239/findmytruck";
 
 function Logo() {
   return (
@@ -89,7 +88,6 @@ export default function Home() {
             <div className="ctas">
               <a className="cta" href="/demo">Watch the demo</a>
               <a className="cta ghost" href="/app">Open the app</a>
-              <a className="cta ghost" href={GITHUB}>View the code</a>
             </div>
             <RoadLorry />
           </div>
@@ -209,7 +207,6 @@ export default function Home() {
           <p>Create a trip, open the driver link on a phone, and watch the status arrive.</p>
           <div className="ctas center">
             <a className="cta light" href="/app">Open the app</a>
-            <a className="cta outline" href={GITHUB}>GitHub</a>
           </div>
         </div>
       </section>
