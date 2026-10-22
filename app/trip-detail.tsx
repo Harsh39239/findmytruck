@@ -35,7 +35,7 @@ type Props = {
   onBack: () => void;
   onRemove: () => void; // drop this truck from the list
   onFound: () => void; // the trip exists, make sure it is on the list
-  embedded?: boolean; // shown inside the demo page: no header, buttons, driver link or chat panel
+  embedded?: boolean; // shown inside the demo page: no header, buttons or driver link, and the full timeline
   onRemind?: (text: string) => void; // the demo page shows the reminder on its phone
 };
 
@@ -44,9 +44,6 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const [missing, setMissing] = useState(false);
   const [now, setNow] = useState(0); // set by the first timer tick
   const [copied, setCopied] = useState(false);
-  const [sim, setSim] = useState<{ from: "driver" | "bot"; text: string }[]>([]);
-  const [simText, setSimText] = useState("");
-  const [simBusy, setSimBusy] = useState(false);
   const [remindBusy, setRemindBusy] = useState(false);
   const [remindNote, setRemindNote] = useState("");
 
@@ -107,27 +104,6 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
     load();
   }
 
-  // Demo panel: send a message as if it came from the driver's phone, and show what the app answers.
-  async function sendSim(text: string) {
-    if (!text.trim()) return;
-    setSimBusy(true);
-    setSim((cur) => [...cur, { from: "driver", text }]);
-    setSimText("");
-    try {
-      const res = await fetch("/api/chat-sim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripId, text, via: "whatsapp" }),
-      });
-      const data = await res.json();
-      setSim((cur) => [...cur, { from: "bot", text: res.ok ? data.reply : data.error ?? "Something went wrong" }]);
-    } catch {
-      setSim((cur) => [...cur, { from: "bot", text: "No connection. Try again." }]);
-    }
-    setSimBusy(false);
-    load();
-  }
-
   async function markHandled(eventId: string) {
     if (!trip) return;
     setTrip({ ...trip, events: trip.events.map((e) => (e.id === eventId ? { ...e, handled: true } : e)) });
@@ -164,6 +140,7 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const phone = created?.trip.id === trip.id ? created.phone : "";
 
   const events = [...trip.events].reverse();
+  const needsYou = events.filter((e) => e.level !== "ok" && !e.handled); // what still waits for a decision
   const last = lastDriverEvent(trip.events);
   const link = `${window.location.origin}/driver/${trip.id}`;
   const open = openCount(trip.events);
@@ -174,6 +151,36 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
   const message = LABELS[trip.language].invite.replace("{url}", link);
   const digits = (normalizePhone(phone) ?? "").replace("+", "");
   const silent = silentFor(trip.events, trip.createdAt, stage, now, silentMin);
+
+  // One card for a message from the driver. The demo page lists all of them; the manager's screen lists only
+  // the ones that still need a decision.
+  const eventCard = (ev: Event) => (
+    <div key={ev.id} className={`card event ${ev.handled ? "handled" : ev.level} ${now > 0 && now - ev.at < 6000 ? "fresh" : ""}`}>
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <span className="title"><span className="kindicon"><Icon name={ev.kind === "slip" ? "camera" : ev.kind === "text" ? "chat" : ev.kind === "system" ? "globe" : "check"} size={16} /></span>{ev.status}</span>
+        {ev.handled
+          ? <span className="badge handled" style={{ flex: "none" }}>HANDLED</span>
+          : <span className={`badge ${ev.level}`} style={{ flex: "none" }}>{levelText[ev.level]}</span>}
+      </div>
+      <div className="muted">
+        {new Date(ev.at).toLocaleTimeString()} · {ago(ev.at, now)}
+        {ev.via && ` · ${ev.via === "whatsapp" ? "WhatsApp" : ev.via === "sms" ? "SMS" : "web page"}`}
+      </div>
+      {ev.note && <p className="note">{ev.note}</p>}
+      <div className="pair">
+        <span>Original</span><span>{ev.original}</span>
+        {ev.kind === "text" && (<><span>Translation</span><span>{ev.translation || "—"}</span></>)}
+        {ev.weightKg !== undefined && (<><span>Weight read</span><span>{ev.weightKg.toLocaleString("en-US")} kg</span></>)}
+      </div>
+      {ev.photo && <img src={ev.photo} alt="Slip" />}
+      {ev.level !== "ok" && !ev.handled && (
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="wa" disabled={remindBusy} onClick={() => remind(ev.id)}>Remind driver</button>
+          <button className="secondary" onClick={() => markHandled(ev.id)}>Mark as handled</button>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <Shell className={embedded ? "embed" : undefined}>
@@ -231,32 +238,6 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
           WhatsApp opens with the driver link ready for you to send.
         </div>
       )}
-
-      {trip.chat && !embedded && (
-        <div className="card">
-          <strong>Driver chat</strong>
-          <p className="muted" style={{ margin: "4px 0 0" }}>
-            {trip.chat.stage === "awaiting_language"
-              ? "Waiting for the driver to choose a language. They reply 1 for Hindi, 2 for Tamil, 3 for Malayalam or 4 for English."
-              : `Talking in ${LANGUAGE_NAMES[trip.language]}${trip.chat.channel ? ` on ${trip.chat.channel === "whatsapp" ? "WhatsApp" : trip.chat.channel === "sms" ? "SMS" : "the web page"}` : ""}. Their replies update this screen by themselves.`}
-          </p>
-          <details style={{ marginTop: 10 }}>
-            <summary className="muted" style={{ cursor: "pointer" }}>Demo: reply as the driver</summary>
-            <p className="hint">Real replies arrive from WhatsApp or SMS. This panel runs the same code, so you can show the conversation without a phone.</p>
-            <div className="chatlog">
-              {sim.map((m, i) => <div key={i} className={`bubble ${m.from}`}>{m.text}</div>)}
-            </div>
-            <div className="row" style={{ marginTop: 8 }}>
-              <input value={simText} onChange={(e) => setSimText(e.target.value)} placeholder="Type what the driver would send, e.g. 2" style={{ flex: 3 }}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sendSim(simText); } }} />
-              <button type="button" style={{ flex: 1 }} disabled={!simText.trim() || simBusy} onClick={() => sendSim(simText)}>Send</button>
-            </div>
-            <div className="chips">
-              {["1", "2", "3", "4", "0"].map((n) => <button key={n} type="button" className="secondary" disabled={simBusy} onClick={() => sendSim(n)}>{n}</button>)}
-            </div>
-          </details>
-        </div>
-      )}
       {routeNote && <div className="banner">{routeNote}</div>}
 
       {route && (
@@ -276,61 +257,44 @@ export default function TripDetail({ tripId, created, demoSpeed, setDemoSpeed, s
         </div>
       )}
 
-      {!embedded && (
-      <div className="card">
-        <strong>Driver link</strong>
-        <div className="linkbox">{link}</div>
-        <div className="btns">
-          <a href={`https://wa.me/${digits}?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-            <button className="wa wide" type="button">Send on WhatsApp</button>
-          </a>
-          <a href={`sms:${normalizePhone(phone) ?? ""}?body=${encodeURIComponent(message)}`} style={{ textDecoration: "none" }}>
-            <button className="secondary wide" type="button">Send SMS</button>
-          </a>
-          <button
-            className="secondary full"
-            type="button"
-            onClick={() => { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
-          >{copied ? "Copied ✓" : "Copy link"}</button>
-        </div>
-        <div className="qrbox">
-          <Qr url={link} />
-          <div className="muted">Or show this code to the driver. Scanning it with the phone camera opens the same link.</div>
-        </div>
-      </div>
-      )}
-
-      <h2>Timeline</h2>
-      {events.length === 0 && <p className="muted">Waiting for the driver.</p>}
-      <div className="timeline">
-      {events.map((ev: Event) => (
-        <div key={ev.id} className={`card event ${ev.handled ? "handled" : ev.level} ${now > 0 && now - ev.at < 6000 ? "fresh" : ""}`}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <span className="title"><span className="kindicon"><Icon name={ev.kind === "slip" ? "camera" : ev.kind === "text" ? "chat" : ev.kind === "system" ? "globe" : "check"} size={16} /></span>{ev.status}</span>
-            {ev.handled
-              ? <span className="badge handled" style={{ flex: "none" }}>HANDLED</span>
-              : <span className={`badge ${ev.level}`} style={{ flex: "none" }}>{levelText[ev.level]}</span>}
-          </div>
-          <div className="muted">
-            {new Date(ev.at).toLocaleTimeString()} · {ago(ev.at, now)}
-            {ev.via && ` · ${ev.via === "whatsapp" ? "WhatsApp" : ev.via === "sms" ? "SMS" : "web page"}`}
-          </div>
-          {ev.note && <p className="note">{ev.note}</p>}
-          <div className="pair">
-            <span>Original</span><span>{ev.original}</span>
-            {ev.kind === "text" && (<><span>Translation</span><span>{ev.translation || "—"}</span></>)}
-            {ev.weightKg !== undefined && (<><span>Weight read</span><span>{ev.weightKg.toLocaleString("en-US")} kg</span></>)}
-          </div>
-          {ev.photo && <img src={ev.photo} alt="Slip" />}
-          {ev.level !== "ok" && !ev.handled && (
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="wa" disabled={remindBusy} onClick={() => remind(ev.id)}>Remind driver</button>
-              <button className="secondary" onClick={() => markHandled(ev.id)}>Mark as handled</button>
-            </div>
+      {embedded ? (
+        <>
+          <h2>Timeline</h2>
+          {events.length === 0 && <p className="muted">Waiting for the driver.</p>}
+          <div className="timeline">{events.map(eventCard)}</div>
+        </>
+      ) : (
+        <>
+          {needsYou.length > 0 && (
+            <>
+              <h2>Needs your attention</h2>
+              {needsYou.map(eventCard)}
+            </>
           )}
-        </div>
-      ))}
-      </div>
+
+          <div className="card">
+            <strong>Driver link</strong>
+            <div className="linkbox">{link}</div>
+            <div className="btns">
+              <a href={`https://wa.me/${digits}?text=${encodeURIComponent(message)}`} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+                <button className="wa wide" type="button">Send on WhatsApp</button>
+              </a>
+              <a href={`sms:${normalizePhone(phone) ?? ""}?body=${encodeURIComponent(message)}`} style={{ textDecoration: "none" }}>
+                <button className="secondary wide" type="button">Send SMS</button>
+              </a>
+              <button
+                className="secondary full"
+                type="button"
+                onClick={() => { navigator.clipboard?.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+              >{copied ? "Copied ✓" : "Copy link"}</button>
+            </div>
+            <div className="qrbox">
+              <Qr url={link} />
+              <div className="muted">Or show this code to the driver. Scanning it with the phone camera opens the same link.</div>
+            </div>
+          </div>
+        </>
+      )}
     </Shell>
   );
 }
