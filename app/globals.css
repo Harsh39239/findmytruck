@@ -89,6 +89,19 @@ button:disabled { opacity: 0.5; cursor: default; }
 .step.done { color: var(--text); }
 .step.current { color: var(--accent); }
 
+/* fleet list */
+button.fleetcard {
+  display: block; width: 100%; text-align: left; font-weight: 400; background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 10px; box-shadow: var(--shadow);
+}
+button.fleetcard:hover { border-color: var(--accent); }
+button.fleetcard strong { font-size: 1.05rem; }
+.steps.mini { margin: 10px 0 4px; gap: 4px; }
+.steps.mini .step i { margin-bottom: 0; height: 5px; }
+.roadbar { position: relative; height: 6px; border-radius: 99px; background: var(--line); margin: 14px 8px 8px 0; }
+.roadfill { height: 100%; border-radius: 99px; background: var(--accent); }
+.roadlorry { position: absolute; top: -17px; transform: translateX(-50%); color: var(--accent); display: block; line-height: 0; transition: left 0.6s linear; }
+
 /* stats */
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
 .stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; box-shadow: var(--shadow); }

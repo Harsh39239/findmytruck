@@ -1,7 +1,7 @@
 // Run with: npm test
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decideSlip, decideText, hasReadableText, normalizePhone, routeProgress, stageIndex } from "../lib/rules.ts";
+import { decideSlip, decideText, hasReadableText, normalizePhone, openCount, routeProgress, stageIndex } from "../lib/rules.ts";
 
 test("phone numbers are cleaned, bad ones rejected", () => {
   assert.equal(normalizePhone("98765 43210"), "+919876543210");
@@ -22,6 +22,20 @@ test("lorry stays at the start until the driver leaves, then moves, and ends whe
   assert.equal(routeProgress(left, 120, 1, t0 + 10 * 3600000), 0.98); // never "arrives" by itself
   assert.equal(routeProgress([...left, ev("Delivered", t0 + 1)], 120, 1, t0 + 5), 1);
   assert.equal(routeProgress([ev("Left", t0, "review")], 120, 1, t0 + 60000), 0); // unconfirmed does not count
+});
+
+test("trip codes are picked out of links or typed codes", async () => {
+  const { parseTripCode } = await import("../lib/fleet.ts");
+  assert.equal(parseTripCode("8e95dc1b"), "8e95dc1b");
+  assert.equal(parseTripCode("https://findmytruck-plum.vercel.app/driver/8E95DC1B"), "8e95dc1b");
+  assert.equal(parseTripCode("  https://x.app/#/trip/8e95dc1b/ "), "8e95dc1b");
+  assert.equal(parseTripCode("hello"), null);
+  assert.equal(parseTripCode(""), null);
+});
+
+test("open items count review and flag that are not handled", () => {
+  const ev = (level, handled = false) => ({ status: "Loaded", at: 1, level, handled });
+  assert.equal(openCount([ev("ok"), ev("review"), ev("flag"), ev("flag", true)]), 2);
 });
 
 test("stepper counts only confirmed statuses", () => {

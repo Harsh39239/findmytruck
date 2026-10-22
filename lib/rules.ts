@@ -22,6 +22,9 @@ export function stageIndex(events: Stamped[]) {
   return stage;
 }
 
+// Review and flag items the manager has not dealt with yet.
+export const openCount = (events: Stamped[]) => events.filter((e) => e.level !== "ok" && !e.handled).length;
+
 // Estimated share of the road covered (0 to 1). There is no live GPS: once the driver taps "Left",
 // the lorry moves along the route at the road's estimated driving time. `speed` > 1 fast-forwards for demos.
 export function routeProgress(events: Stamped[], durationMin: number, speed: number, now: number) {

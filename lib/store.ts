@@ -46,6 +46,25 @@ const redis = url && token ? new Redis({ url, token }) : null;
 const g = globalThis as unknown as { __trips?: Map<string, Trip> };
 const memory = (g.__trips ??= new Map<string, Trip>());
 
+// A light copy of a trip for the fleet list: no photos and no road points, so it stays small.
+export type TripSummary = Omit<Trip, "events" | "route"> & {
+  events: Omit<Event, "photo">[];
+  route?: Omit<RouteInfo, "points">;
+};
+
+export function summarize(trip: Trip): TripSummary {
+  const { events, route, ...rest } = trip;
+  return {
+    ...rest,
+    events: events.map((e) => {
+      const lite = { ...e };
+      delete lite.photo;
+      return lite;
+    }),
+    route: route && { from: route.from, to: route.to, distanceKm: route.distanceKm, durationMin: route.durationMin },
+  };
+}
+
 export async function saveTrip(trip: Trip) {
   if (redis) await redis.set(`trip:${trip.id}`, trip, { ex: 60 * 60 * 24 * 7 });
   else memory.set(trip.id, trip);
