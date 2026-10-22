@@ -14,6 +14,7 @@ export type Event = {
   note: string;
   weightKg?: number;
   photo?: string;
+  handled?: boolean; // the manager has dealt with a review/flag item
 };
 
 export type Trip = {

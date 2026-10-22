@@ -21,13 +21,18 @@ export default function ManagerPage() {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(0); // set by the first timer tick
   const [copied, setCopied] = useState(false);
+  const [ready, setReady] = useState(false); // false until we know whether a saved trip exists
 
   const load = useCallback(async (id: string) => {
-    const res = await fetch(`/api/trip?id=${id}`);
-    if (res.ok) setTrip(await res.json());
-    else {
-      try { localStorage.removeItem(STORAGE_KEY); } catch {}
-      setTrip(null);
+    try {
+      const res = await fetch(`/api/trip?id=${id}`);
+      if (res.ok) setTrip(await res.json());
+      else {
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        setTrip(null);
+      }
+    } catch {
+      // No connection right now: keep showing what we have and try again on the next tick.
     }
   }, []);
 
@@ -40,7 +45,8 @@ export default function ManagerPage() {
       if (!id) {
         try { id = localStorage.getItem(STORAGE_KEY) ?? ""; } catch {}
       }
-      if (id) load(id);
+      if (id) load(id).finally(() => setReady(true));
+      else setReady(true);
     };
     const first = setTimeout(tick, 0);
     const timer = setInterval(tick, 3000);
@@ -68,6 +74,21 @@ export default function ManagerPage() {
     try { localStorage.removeItem(STORAGE_KEY); } catch {}
     setTrip(null);
   }
+
+  async function markHandled(eventId: string) {
+    if (!trip) return;
+    setTrip({ ...trip, events: trip.events.map((e) => (e.id === eventId ? { ...e, handled: true } : e)) });
+    try {
+      await fetch("/api/event", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId: trip.id, eventId }),
+      });
+    } catch {}
+    load(trip.id);
+  }
+
+  if (!ready) return <main><p className="muted">Loading...</p></main>;
 
   if (!trip) {
     return (
@@ -97,6 +118,7 @@ export default function ManagerPage() {
   const events = [...trip.events].reverse();
   const last = trip.events[trip.events.length - 1];
   const link = `${window.location.origin}/driver/${trip.id}`;
+  const open = trip.events.filter((e) => e.level !== "ok" && !e.handled).length;
 
   return (
     <main>
@@ -105,6 +127,9 @@ export default function ManagerPage() {
 
       <div className="card">
         <strong>Last update: {last ? ago(last.at, now) : "nothing yet"}</strong>
+        <div className={open > 0 ? "error" : "muted"} style={{ marginTop: 4 }}>
+          {open > 0 ? `${open} ${open === 1 ? "item needs" : "items need"} your decision` : "Nothing needs your decision"}
+        </div>
         <div className="linkbox">{link}</div>
         <div className="row">
           <button
@@ -118,10 +143,12 @@ export default function ManagerPage() {
       <h2>Timeline</h2>
       {events.length === 0 && <p className="muted">Waiting for the driver. Open the driver link on another phone or tab.</p>}
       {events.map((ev: Event) => (
-        <div key={ev.id} className={`card event ${ev.level}`}>
+        <div key={ev.id} className={`card event ${ev.handled ? "handled" : ev.level}`}>
           <div className="row" style={{ justifyContent: "space-between" }}>
             <strong>{ev.status}</strong>
-            <span className={`badge ${ev.level}`}>{levelText[ev.level]}</span>
+            {ev.handled
+              ? <span className="badge handled">HANDLED</span>
+              : <span className={`badge ${ev.level}`}>{levelText[ev.level]}</span>}
           </div>
           <div className="muted">{new Date(ev.at).toLocaleTimeString()} · {ago(ev.at, now)}</div>
           {ev.note && <p style={{ margin: "6px 0" }}><strong>{ev.note}</strong></p>}
@@ -131,6 +158,9 @@ export default function ManagerPage() {
             {ev.weightKg !== undefined && (<><span>Weight read</span><span>{ev.weightKg.toLocaleString("en-US")} kg</span></>)}
           </div>
           {ev.photo && <img src={ev.photo} alt="Slip" />}
+          {ev.level !== "ok" && !ev.handled && (
+            <p><button className="secondary" onClick={() => markHandled(ev.id)}>Mark as handled</button></p>
+          )}
         </div>
       ))}
     </main>

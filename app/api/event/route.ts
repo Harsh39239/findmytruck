@@ -6,6 +6,19 @@ import { getTrip, saveTrip, type Event } from "@/lib/store";
 
 const MAX_PHOTO_CHARS = 3_000_000;
 
+// The manager marks a flagged or review item as handled. The original verdict stays on record.
+export async function PATCH(req: Request) {
+  const b = await req.json().catch(() => null);
+  const trip = await getTrip(String(b?.tripId ?? ""));
+  if (!trip) return NextResponse.json({ error: "Trip not found" }, { status: 404 });
+  const event = trip.events.find((e) => e.id === b?.eventId);
+  if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
+  if (event.level === "ok") return NextResponse.json({ error: "Only review or flag items can be marked as handled" }, { status: 400 });
+  event.handled = true;
+  await saveTrip(trip);
+  return NextResponse.json(event);
+}
+
 // The driver sends a tap, free text, or a slip photo. Claude reads; plain rules decide.
 export async function POST(req: Request) {
   const b = await req.json().catch(() => null);
